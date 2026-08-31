@@ -257,8 +257,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       // --- 5. RENDER SCENE ---
       ctx.clearRect(0, 0, cw, ch);
 
-      // 5.1 Fullscreen Stardew-Style Grass & Cobblestone Plaza
-      renderEnvironmentGround(ctx, cw, ch, centerX, centerY, currentTime);
+      // 5.1 Fullscreen Stardew-Style Grass & Cobblestone Plaza (Themed)
+      renderEnvironmentGround(ctx, cw, ch, centerX, centerY, currentTime, currentRoom.theme);
 
       // 5.2 Interactive Props & Furniture
       dynamicProps.forEach((prop) => {
@@ -345,10 +345,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
         }
       });
 
-      // 5.5 Cherry Blossom Trees & Foreground Foliage across all 4 corners
-      renderTreesAndFoliage(ctx, cw, ch);
+      // 5.5 Trees & Foreground Foliage (Themed)
+      renderTreesAndFoliage(ctx, cw, ch, currentRoom.theme);
 
-      // 5.6 Falling Blossom Particles
+      // 5.6 Falling Floating Particles (Themed)
       particlesRef.current.forEach((p) => {
         p.x += p.vx;
         p.y += p.vy;
@@ -361,20 +361,32 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
         ctx.rotate(p.rot);
         ctx.beginPath();
         ctx.ellipse(0, 0, p.size, p.size * 0.6, 0, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 182, 193, ${p.alpha})`;
+
+        if (currentRoom.theme === 'moonlight') {
+          ctx.fillStyle = `rgba(162, 210, 255, ${p.alpha * 0.8})`;
+          ctx.shadowColor = '#4cc9f0';
+          ctx.shadowBlur = 8;
+        } else if (currentRoom.theme === 'sunshine') {
+          ctx.fillStyle = `rgba(255, 215, 0, ${p.alpha * 0.75})`;
+          ctx.shadowColor = '#ffd166';
+          ctx.shadowBlur = 6;
+        } else {
+          ctx.fillStyle = `rgba(255, 182, 193, ${p.alpha})`;
+        }
+
         ctx.fill();
         ctx.restore();
       });
 
       // 5.7 Fullscreen Ambient Lighting Filter
-      renderDayNightLighting(ctx, cw, ch, centerX, centerY, timeOfDay);
+      renderDayNightLighting(ctx, cw, ch, centerX, centerY, timeOfDay, currentRoom.theme);
 
       animationFrameId = requestAnimationFrame(renderLoop);
     };
 
     animationFrameId = requestAnimationFrame(renderLoop);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [myCat, stats, onlineCats, timeOfDay, interactWithProp, sniffCat, setActiveNearbyProp, setSelectedNearbyCat]);
+  }, [myCat, stats, onlineCats, timeOfDay, currentRoom, interactWithProp, sniffCat, setActiveNearbyProp, setSelectedNearbyCat, sendMyPosition]);
 
   // Click on canvas to move or select
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -384,14 +396,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
     const clickX = (e.clientX - rect.left) * (canvas.width / rect.width);
     const clickY = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
-
-    const clickedCat = onlineCats.find((cat, idx) => {
-      let cx = centerX + (idx === 0 ? -120 : idx === 1 ? 220 : -200);
-      let cy = centerY + (idx === 0 ? 60 : idx === 1 ? -40 : 160);
-      return Math.hypot(clickX - cx, clickY - cy) < 45;
-    });
+    const clickedCat = onlineCats.find((cat) => Math.hypot(clickX - cat.x, clickY - cat.y) < 45);
 
     if (clickedCat) {
       soundManager.playMeow(1.1);
@@ -401,7 +406,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
   }, [onlineCats]);
 
   return (
-    <div className="absolute inset-0 w-full h-full overflow-hidden bg-[#b7e4c7]">
+    <div
+      className={`absolute inset-0 w-full h-full overflow-hidden transition-colors duration-700 ${
+        currentRoom.theme === 'moonlight' ? 'bg-[#151c2e]' : currentRoom.theme === 'sunshine' ? 'bg-[#d8f3dc]' : 'bg-[#b7e4c7]'
+      }`}
+    >
       <canvas
         ref={canvasRef}
         width={dimensions.width}
@@ -423,7 +432,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
               soundManager.playPop();
               interactWithProp(activeNearbyProp);
             }}
-            className="btn-jelly bg-[#ffcad4] text-[#523e32] px-5 py-1.5 rounded-full text-xs font-bold font-fredoka border-2 border-[#523e32]"
+            className="btn-jelly bg-[#ffcad4] text-[#523e32] px-5 py-1.5 rounded-full text-xs font-bold font-fredoka border-2 border-[#523e32] cursor-pointer"
           >
             กดใช้ [E]
           </button>
@@ -446,7 +455,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
                 soundManager.playMeow(1.2);
                 sniffCat(selectedNearbyCat.id);
               }}
-              className="btn-jelly bg-[#ffe494] text-[#523e32] px-4 py-1.5 rounded-full text-xs font-bold font-fredoka border-2 border-[#523e32]"
+              className="btn-jelly bg-[#ffe494] text-[#523e32] px-4 py-1.5 rounded-full text-xs font-bold font-fredoka border-2 border-[#523e32] cursor-pointer"
             >
               ดมก้นทักทาย 👃
             </button>
@@ -455,7 +464,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
                 soundManager.playPurr();
                 allogroomCat(selectedNearbyCat.id);
               }}
-              className="btn-jelly bg-[#ffcad4] text-[#523e32] px-4 py-1.5 rounded-full text-xs font-bold font-fredoka border-2 border-[#523e32]"
+              className="btn-jelly bg-[#ffcad4] text-[#523e32] px-4 py-1.5 rounded-full text-xs font-bold font-fredoka border-2 border-[#523e32] cursor-pointer"
             >
               ช่วยเลียขน 💖
             </button>
@@ -482,14 +491,21 @@ function renderEnvironmentGround(
   h: number,
   centerX: number,
   centerY: number,
-  t: number
+  t: number,
+  theme: 'sakura' | 'sunshine' | 'moonlight' = 'sakura'
 ) {
-  // 1. Soft Grass Background
-  ctx.fillStyle = '#b7e4c7';
+  // 1. Theme-Specific Grass Colors
+  if (theme === 'moonlight') {
+    ctx.fillStyle = '#1b263b';
+  } else if (theme === 'sunshine') {
+    ctx.fillStyle = '#a7c957';
+  } else {
+    ctx.fillStyle = '#b7e4c7';
+  }
   ctx.fillRect(0, 0, w, h);
 
   // Grass pattern dots
-  ctx.fillStyle = '#95d5b2';
+  ctx.fillStyle = theme === 'moonlight' ? '#273854' : theme === 'sunshine' ? '#8cb343' : '#95d5b2';
   for (let x = 30; x < w; x += 50) {
     for (let y = 30; y < h; y += 50) {
       ctx.beginPath();
@@ -498,21 +514,31 @@ function renderEnvironmentGround(
     }
   }
 
-  // 2. Central Cobblestone Plaza Circle (Scaled dynamically to viewport)
+  // 2. Central Cobblestone Plaza Circle
   ctx.save();
   const plazaRadiusX = Math.min(w * 0.38, 420);
   const plazaRadiusY = Math.min(h * 0.32, 240);
 
   ctx.beginPath();
   ctx.ellipse(centerX, centerY + 30, plazaRadiusX, plazaRadiusY, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#faedcd';
+
+  if (theme === 'moonlight') {
+    ctx.fillStyle = '#2c3e5a';
+    ctx.strokeStyle = '#48658a';
+  } else if (theme === 'sunshine') {
+    ctx.fillStyle = '#ffe5a3';
+    ctx.strokeStyle = '#f4a261';
+  } else {
+    ctx.fillStyle = '#faedcd';
+    ctx.strokeStyle = '#d4a373';
+  }
+
   ctx.fill();
   ctx.lineWidth = 5;
-  ctx.strokeStyle = '#d4a373';
   ctx.stroke();
 
   // Cobblestone stones pattern
-  ctx.fillStyle = '#e9d8a6';
+  ctx.fillStyle = theme === 'moonlight' ? '#3d5272' : theme === 'sunshine' ? '#ffd166' : '#e9d8a6';
   for (let angle = 0; angle < Math.PI * 2; angle += 0.25) {
     const rx = centerX + Math.cos(angle) * (plazaRadiusX * 0.7);
     const ry = (centerY + 30) + Math.sin(angle) * (plazaRadiusY * 0.7);
@@ -531,9 +557,10 @@ function renderEnvironmentGround(
     { x: centerX - 120, y: centerY + 220 },
     { x: centerX + 180, y: centerY + 210 },
   ];
+  const flowerEmoji = theme === 'moonlight' ? '🪻' : theme === 'sunshine' ? '🌻' : '🌸';
   flowers.forEach((fl) => {
     ctx.font = '20px sans-serif';
-    ctx.fillText('🌸', fl.x, fl.y);
+    ctx.fillText(flowerEmoji, fl.x, fl.y);
   });
 }
 
@@ -655,7 +682,12 @@ function renderProp(ctx: CanvasRenderingContext2D, prop: InteractiveProp, t: num
   ctx.restore();
 }
 
-function renderTreesAndFoliage(ctx: CanvasRenderingContext2D, w: number, h: number) {
+function renderTreesAndFoliage(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  theme: 'sakura' | 'sunshine' | 'moonlight' = 'sakura'
+) {
   const trees = [
     { x: 90, y: 110 },
     { x: w - 90, y: 110 },
@@ -669,7 +701,7 @@ function renderTreesAndFoliage(ctx: CanvasRenderingContext2D, w: number, h: numb
 
     ctx.beginPath();
     ctx.roundRect(-12, 0, 24, 44, 4);
-    ctx.fillStyle = '#7f5539';
+    ctx.fillStyle = theme === 'moonlight' ? '#352b48' : '#7f5539';
     ctx.fill();
     ctx.lineWidth = 2.5;
     ctx.strokeStyle = '#523e32';
@@ -679,15 +711,25 @@ function renderTreesAndFoliage(ctx: CanvasRenderingContext2D, w: number, h: numb
     ctx.arc(0, -25, 44, 0, Math.PI * 2);
     ctx.arc(-26, -15, 32, 0, Math.PI * 2);
     ctx.arc(26, -15, 32, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffb5c5';
+
+    if (theme === 'moonlight') {
+      ctx.fillStyle = '#5c4d7d';
+      ctx.strokeStyle = '#7b68a6';
+    } else if (theme === 'sunshine') {
+      ctx.fillStyle = '#52b788';
+      ctx.strokeStyle = '#40916c';
+    } else {
+      ctx.fillStyle = '#ffb5c5';
+      ctx.strokeStyle = '#ff8fa3';
+    }
+
     ctx.fill();
     ctx.lineWidth = 3;
-    ctx.strokeStyle = '#ff8fa3';
     ctx.stroke();
 
     ctx.beginPath();
     ctx.arc(-10, -32, 22, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffe5ec';
+    ctx.fillStyle = theme === 'moonlight' ? '#8e79b8' : theme === 'sunshine' ? '#74c69d' : '#ffe5ec';
     ctx.fill();
 
     ctx.restore();
@@ -700,33 +742,40 @@ function renderDayNightLighting(
   h: number,
   centerX: number,
   centerY: number,
-  timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night'
+  timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night',
+  theme: 'sakura' | 'sunshine' | 'moonlight' = 'sakura'
 ) {
   ctx.save();
-  if (timeOfDay === 'morning') {
-    ctx.fillStyle = 'rgba(255, 183, 140, 0.12)';
-    ctx.fillRect(0, 0, w, h);
-  } else if (timeOfDay === 'evening') {
-    ctx.fillStyle = 'rgba(235, 94, 85, 0.2)';
-    ctx.fillRect(0, 0, w, h);
-  } else if (timeOfDay === 'night') {
-    ctx.fillStyle = 'rgba(26, 32, 64, 0.45)';
+
+  if (theme === 'moonlight' || timeOfDay === 'night') {
+    ctx.fillStyle = 'rgba(15, 20, 42, 0.55)';
     ctx.fillRect(0, 0, w, h);
 
+    // Warm glowing lanterns in the dark
     const lights = [
-      { x: centerX, y: centerY + 30, r: 220 },
-      { x: centerX - 320, y: centerY - 140, r: 120 },
-      { x: centerX + 280, y: centerY + 80, r: 120 },
+      { x: centerX, y: centerY + 30, r: 240 },
+      { x: centerX - 320, y: centerY - 140, r: 140 },
+      { x: centerX + 280, y: centerY + 80, r: 140 },
     ];
     lights.forEach((lt) => {
       const grad = ctx.createRadialGradient(lt.x, lt.y, 10, lt.x, lt.y, lt.r);
-      grad.addColorStop(0, 'rgba(255, 230, 160, 0.35)');
-      grad.addColorStop(1, 'rgba(255, 230, 160, 0)');
+      grad.addColorStop(0, 'rgba(255, 220, 140, 0.45)');
+      grad.addColorStop(1, 'rgba(255, 220, 140, 0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(lt.x, lt.y, lt.r, 0, Math.PI * 2);
       ctx.fill();
     });
+  } else if (theme === 'sunshine' || timeOfDay === 'afternoon') {
+    ctx.fillStyle = 'rgba(255, 240, 180, 0.15)';
+    ctx.fillRect(0, 0, w, h);
+  } else if (timeOfDay === 'evening') {
+    ctx.fillStyle = 'rgba(235, 94, 85, 0.2)';
+    ctx.fillRect(0, 0, w, h);
+  } else {
+    ctx.fillStyle = 'rgba(255, 183, 140, 0.1)';
+    ctx.fillRect(0, 0, w, h);
   }
+
   ctx.restore();
 }

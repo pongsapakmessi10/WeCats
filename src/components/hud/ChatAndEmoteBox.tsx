@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { useCatStore } from '@/store/catStore';
 import { soundManager } from '@/audio/soundManager';
-import { MessageCircle, Send, Smile, ChevronDown, ChevronUp } from 'lucide-react';
-import { useMultiplayer } from '@/game/multiplayer/useMultiplayer';
+import { MessageCircle, Send, ChevronDown, ChevronUp } from 'lucide-react';
+import { broadcastLiveChat } from '@/game/multiplayer/broadcast';
 
 const EMOTE_LIST = ['💖', '🐾', '🐟', '💤', '⚡', '🌸', '👑', '❓', '🐱', '✨'];
 
@@ -12,8 +12,6 @@ export const ChatAndEmoteBox: React.FC = () => {
   const chatMessages = useCatStore((state) => state.chatMessages);
   const sendChatMessage = useCatStore((state) => state.sendChatMessage);
   const sendEmote = useCatStore((state) => state.sendEmote);
-  const currentRoom = useCatStore((state) => state.currentRoom);
-  const { sendMyChat } = useMultiplayer(`presence-${currentRoom.id}`);
 
   const [inputText, setInputText] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -24,14 +22,14 @@ export const ChatAndEmoteBox: React.FC = () => {
     soundManager.playPop();
     const text = inputText.trim();
     sendChatMessage(text);
-    sendMyChat(text);
+    broadcastLiveChat(text);
     setInputText('');
   };
 
   const handleEmoteClick = (emote: string) => {
     soundManager.playPop();
     sendEmote(emote);
-    sendMyChat(undefined, emote);
+    broadcastLiveChat(undefined, emote);
   };
 
   return (

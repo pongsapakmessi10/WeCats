@@ -15,47 +15,66 @@ interface MemberInfo {
   };
 }
 
-export function useMultiplayer(channelName: string = 'presence-plaza-1') {
+export function useMultiplayer(rawChannelName: string = 'presence-public-sakura') {
   const myCat = useCatStore((state) => state.myCat);
   const stats = useCatStore((state) => state.stats);
   const setOnlineCats = useCatStore((state) => state.setOnlineCats);
   const setNotification = useCatStore((state) => state.setNotification);
 
+  // Keep references to latest myCat & stats without causing subscription re-triggers
+  const myCatRef = useRef(myCat);
+  const statsRef = useRef(stats);
+  useEffect(() => {
+    myCatRef.current = myCat;
+    statsRef.current = stats;
+  }, [myCat, stats]);
+
   const lastMoveSentRef = useRef<number>(0);
   const myIdRef = useRef<string>(`cat_${Math.random().toString(36).substring(2, 9)}`);
   const channelRef = useRef<any>(null);
 
-  // Broadcast function via server API
-  const broadcastEvent = useCallback(async (event: string, data: any) => {
-    const pusher = getPusherClient();
-    const socketId = pusher?.connection?.socket_id;
+  // Sanitize channel name for Pusher compliance (alphanumeric, -, _)
+  const channelName = rawChannelName.startsWith('presence-')
+    ? `presence-${rawChannelName.replace(/^presence-/, '').replace(/[^a-zA-Z0-9_-]/g, '_')}`
+    : `presence-${rawChannelName.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
-    try {
-      await fetch('/api/pusher/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channel: channelName,
-          event,
-          data: {
-            ...data,
-            senderId: myIdRef.current,
-          },
-          socketId,
-        }),
-      });
-    } catch {}
-  }, [channelName]);
+  // Broadcast event via backend route
+  const broadcastEvent = useCallback(
+    async (event: string, data: any) => {
+      const pusher = getPusherClient();
+      const socketId = pusher?.connection?.socket_id;
 
-  // Connect to Pusher Presence Channel
+      try {
+        await fetch('/api/pusher/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channel: channelName,
+            event,
+            data: {
+              ...data,
+              senderId: myIdRef.current,
+            },
+            socketId,
+          }),
+        });
+      } catch {}
+    },
+    [channelName]
+  );
+
+  // Connect to Pusher Presence Channel ONLY when channelName changes
   useEffect(() => {
     const pusher = getPusherClient();
     if (!pusher) return;
 
+    // Reset online cats list when entering new channel
+    setOnlineCats([]);
+
     const channel = pusher.subscribe(channelName);
     channelRef.current = channel;
 
-    // Subscription succeeded
+    // 1. Subscription succeeded: collect existing members
     channel.bind('pusher:subscription_succeeded', (members: any) => {
       myIdRef.current = members.myID || myIdRef.current;
       const initialCats: OnlineCat[] = [];
@@ -65,12 +84,12 @@ export function useMultiplayer(channelName: string = 'presence-plaza-1') {
           initialCats.push({
             id: member.id,
             customization: {
-              ...myCat,
-              name: member.info?.username || 'Friend Cat',
+              ...myCatRef.current,
+              name: member.info?.username || 'เพื่อนแมว',
             },
-            stats,
-            x: 650 + Math.random() * 100,
-            y: 450 + Math.random() * 100,
+            stats: statsRef.current,
+            x: 650 + (Math.random() - 0.5) * 120,
+            y: 450 + (Math.random() - 0.5) * 100,
             direction: 'down',
             behavior: 'idle',
             lastUpdated: Date.now(),
@@ -78,95 +97,141 @@ export function useMultiplayer(channelName: string = 'presence-plaza-1') {
         }
       });
 
-      if (initialCats.length > 0) {
-        setOnlineCats(initialCats);
-      }
+      setOnlineCats(initialCats);
 
-      // Announce myself to everyone
+      // Announce myself to all members in this channel
       broadcastEvent('cat-joined', {
-        customization: myCat,
-        stats,
+        customization: myCatRef.current,
+        stats: statsRef.current,
+        isGreeting: true,
       });
     });
 
-    // Member added
+    // 2. Member added
     channel.bind('pusher:member_added', (member: MemberInfo) => {
       if (member.id === myIdRef.current) return;
 
       const newCat: OnlineCat = {
         id: member.id,
         customization: {
-          ...myCat,
-          name: member.info?.username || 'New Cat Pal',
+          ...myCatRef.current,
+          name: member.info?.username || 'เพื่อนแมวตัวใหม่',
         },
-        stats,
-        x: 700 + Math.random() * 40,
-        y: 480 + Math.random() * 40,
+        stats: statsRef.current,
+        x: 700 + (Math.random() - 0.5) * 60,
+        y: 480 + (Math.random() - 0.5) * 60,
         direction: 'down',
         behavior: 'idle',
         lastUpdated: Date.now(),
       };
 
       setOnlineCats((prev: OnlineCat[]) => [...prev.filter((c: OnlineCat) => c.id !== member.id), newCat]);
-      setNotification(`🐾 ${member.info?.username || 'เพื่อนแมวตัวใหม่'} เข้ามาใน Plaza!`);
+      setNotification(`🐾 ${member.info?.username || 'เพื่อนแมว'} เข้ามาในห้อง!`);
+
+      // Greet back so they have our full customized avatar
+      broadcastEvent('cat-joined', {
+        customization: myCatRef.current,
+        stats: statsRef.current,
+        isGreeting: false,
+      });
     });
 
-    // Member removed
+    // 3. Member removed
     channel.bind('pusher:member_removed', (member: MemberInfo) => {
       setOnlineCats((prev: OnlineCat[]) => prev.filter((c: OnlineCat) => c.id !== member.id));
     });
 
-    // Handle Cat Joined Announcement
-    channel.bind('cat-joined', (data: { senderId: string; customization: CatCustomization; stats: CatStats }) => {
-      if (data.senderId === myIdRef.current) return;
+    // 4. Cat Joined Handshake
+    channel.bind(
+      'cat-joined',
+      (data: { senderId: string; customization: CatCustomization; stats: CatStats; isGreeting?: boolean }) => {
+        if (data.senderId === myIdRef.current) return;
 
-      setOnlineCats((prev: OnlineCat[]) => {
-        const existing = prev.find((c: OnlineCat) => c.id === data.senderId);
-        if (existing) {
-          return prev.map((c: OnlineCat) =>
-            c.id === data.senderId
-              ? { ...c, customization: data.customization, stats: data.stats }
-              : c
-          );
+        setOnlineCats((prev: OnlineCat[]) => {
+          const existing = prev.find((c: OnlineCat) => c.id === data.senderId);
+          if (existing) {
+            return prev.map((c: OnlineCat) =>
+              c.id === data.senderId
+                ? { ...c, customization: data.customization, stats: data.stats }
+                : c
+            );
+          }
+          return [
+            ...prev,
+            {
+              id: data.senderId,
+              customization: data.customization,
+              stats: data.stats,
+              x: 700 + (Math.random() - 0.5) * 60,
+              y: 480 + (Math.random() - 0.5) * 60,
+              direction: 'down',
+              behavior: 'idle',
+              lastUpdated: Date.now(),
+            },
+          ];
+        });
+
+        // If they just joined and greeted us, reply back with our profile
+        if (data.isGreeting) {
+          broadcastEvent('cat-joined', {
+            customization: myCatRef.current,
+            stats: statsRef.current,
+            isGreeting: false,
+          });
         }
-        return [
-          ...prev,
-          {
-            id: data.senderId,
-            customization: data.customization,
-            stats: data.stats,
-            x: 700,
-            y: 480,
-            direction: 'down',
-            behavior: 'idle',
-            lastUpdated: Date.now(),
-          },
-        ];
-      });
-    });
+      }
+    );
 
-    // Handle Cat Movement
-    channel.bind('cat-move', (data: { senderId: string; x: number; y: number; direction: 'up' | 'down' | 'left' | 'right'; behavior: string; isMoving: boolean }) => {
-      if (data.senderId === myIdRef.current) return;
+    // 5. Cat Movement
+    channel.bind(
+      'cat-move',
+      (data: {
+        senderId: string;
+        x: number;
+        y: number;
+        direction: 'up' | 'down' | 'left' | 'right';
+        behavior: string;
+        isMoving: boolean;
+      }) => {
+        if (data.senderId === myIdRef.current) return;
 
-      setOnlineCats((prev: OnlineCat[]) =>
-        prev.map((c: OnlineCat) =>
-          c.id === data.senderId
-            ? {
-                ...c,
+        setOnlineCats((prev: OnlineCat[]) => {
+          const existing = prev.find((c: OnlineCat) => c.id === data.senderId);
+          if (!existing) {
+            return [
+              ...prev,
+              {
+                id: data.senderId,
+                customization: myCatRef.current,
+                stats: statsRef.current,
                 x: data.x,
                 y: data.y,
                 direction: data.direction,
                 behavior: data.behavior as any,
                 isMoving: data.isMoving,
                 lastUpdated: Date.now(),
-              }
-            : c
-        )
-      );
-    });
+              },
+            ];
+          }
 
-    // Handle Cat Chat / Emotes
+          return prev.map((c: OnlineCat) =>
+            c.id === data.senderId
+              ? {
+                  ...c,
+                  x: data.x,
+                  y: data.y,
+                  direction: data.direction,
+                  behavior: data.behavior as any,
+                  isMoving: data.isMoving,
+                  lastUpdated: Date.now(),
+                }
+              : c
+          );
+        });
+      }
+    );
+
+    // 6. Cat Chat / Emotes
     channel.bind('cat-chat', (data: { senderId: string; text?: string; emote?: string }) => {
       if (data.senderId === myIdRef.current) return;
 
@@ -200,7 +265,7 @@ export function useMultiplayer(channelName: string = 'presence-plaza-1') {
       }, 4500);
     });
 
-    // Handle Friend Request / Treat Gifting
+    // 7. Friend Request / Treat Gifting
     channel.bind('cat-friend-action', (data: { senderId: string; senderName: string; type: 'request' | 'treat' }) => {
       if (data.senderId === myIdRef.current) return;
 
@@ -217,7 +282,7 @@ export function useMultiplayer(channelName: string = 'presence-plaza-1') {
       channel.unbind_all();
       pusher.unsubscribe(channelName);
     };
-  }, [channelName, myCat, stats, setOnlineCats, setNotification, broadcastEvent]);
+  }, [channelName, setOnlineCats, setNotification, broadcastEvent]);
 
   // Function to broadcast local player position
   const sendMyPosition = useCallback(
@@ -253,11 +318,11 @@ export function useMultiplayer(channelName: string = 'presence-plaza-1') {
   const sendFriendAction = useCallback(
     (type: 'request' | 'treat') => {
       broadcastEvent('cat-friend-action', {
-        senderName: myCat.name,
+        senderName: myCatRef.current.name,
         type,
       });
     },
-    [broadcastEvent, myCat.name]
+    [broadcastEvent]
   );
 
   return {
