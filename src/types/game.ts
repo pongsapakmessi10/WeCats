@@ -141,11 +141,29 @@ export interface SavedPhoto {
   filter?: string;
 }
 
+export interface FriendRequest {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderCustomization: CatCustomization;
+  timestamp: number;
+}
+
+export interface DirectMessage {
+  id: string;
+  fromPeerId: string;
+  toPeerId: string;
+  senderName: string;
+  text: string;
+  timestamp: number;
+}
+
 export interface FriendData {
   id: string;
   username: string;
   catName: string;
   breed: BreedType;
+  customization?: CatCustomization;
   isOnline: boolean;
   friendshipPoints: number;
   lastGiftReceived?: number;

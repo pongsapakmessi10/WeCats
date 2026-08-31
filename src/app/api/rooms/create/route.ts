@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
+    const session = await getSession();
     const body = await request.json();
     const { name, passcode, theme = 'sakura', maxCapacity = 10 } = body;
 
@@ -21,6 +23,8 @@ export async function POST(request: Request) {
         passcode,
         theme,
         maxCapacity: Number(maxCapacity) || 10,
+        ownerId: session?.userId || null,
+        ownerName: session?.username || 'Host',
       },
     });
 
@@ -32,6 +36,8 @@ export async function POST(request: Request) {
         type: room.type,
         theme: room.theme,
         maxCapacity: room.maxCapacity,
+        ownerId: room.ownerId,
+        ownerName: room.ownerName,
       },
     });
   } catch (error) {

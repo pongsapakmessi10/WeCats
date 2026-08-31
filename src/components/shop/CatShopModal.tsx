@@ -12,17 +12,24 @@ import {
   Crown,
   Heart,
   Zap,
+  Glasses,
+  Feather,
+  Shirt,
 } from 'lucide-react';
 import { ShopCategory, ShopItem } from '@/types/game';
+import {
+  BoutiqueBagIcon,
+  FishCoinIcon,
+} from '@/components/ui/GameIcons';
 
-const CATEGORY_TABS: { id: ShopCategory | 'all'; label: string; icon: string }[] = [
-  { id: 'all', label: 'ทั้งหมด', icon: '✨' },
-  { id: 'hats', label: 'หมวก & มงกุฎ', icon: '👒' },
-  { id: 'neck', label: 'ปลอกคอ & สร้อย', icon: '🎀' },
-  { id: 'back', label: 'ปีก & ผ้าคลุม', icon: '🪽' },
-  { id: 'face', label: 'แว่น & หนวด', icon: '👓' },
-  { id: 'aura', label: 'ออร่าเวทมนตร์', icon: '🌟' },
-  { id: 'treats', label: 'ขนม & แคทนิป', icon: '🍣' },
+const CATEGORY_TABS: { id: ShopCategory | 'all'; label: string; icon: React.ReactNode }[] = [
+  { id: 'all', label: 'ทั้งหมด', icon: <Sparkles size={14} className="text-amber-500" /> },
+  { id: 'hats', label: 'หมวก & มงกุฎ', icon: <Crown size={14} className="text-amber-500" /> },
+  { id: 'neck', label: 'ปลอกคอ & สร้อย', icon: <Heart size={14} className="text-pink-500" /> },
+  { id: 'back', label: 'ปีก & ผ้าคลุม', icon: <Feather size={14} className="text-purple-500" /> },
+  { id: 'face', label: 'แว่น & หนวด', icon: <Glasses size={14} className="text-blue-500" /> },
+  { id: 'aura', label: 'ออร่าเวทมนตร์', icon: <Zap size={14} className="text-yellow-500" /> },
+  { id: 'treats', label: 'ขนม & แคทนิป', icon: <FishCoinIcon size={14} /> },
 ];
 
 export const CatShopModal: React.FC = () => {
@@ -59,13 +66,13 @@ export const CatShopModal: React.FC = () => {
   const getRarityBadge = (rarity: ShopItem['rarity']) => {
     switch (rarity) {
       case 'legendary':
-        return <span className="badge-pill bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-fredoka">👑 Legendary</span>;
+        return <span className="badge-pill bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-fredoka flex items-center gap-1"><Crown size={10} /> Legendary</span>;
       case 'epic':
-        return <span className="badge-pill bg-purple-100 text-purple-900 border border-purple-300 text-[10px] font-fredoka">💜 Epic</span>;
+        return <span className="badge-pill bg-purple-100 text-purple-900 border border-purple-300 text-[10px] font-fredoka flex items-center gap-1"><Sparkles size={10} /> Epic</span>;
       case 'rare':
-        return <span className="badge-pill bg-blue-100 text-blue-900 border border-blue-300 text-[10px] font-fredoka">💙 Rare</span>;
+        return <span className="badge-pill bg-blue-100 text-blue-900 border border-blue-300 text-[10px] font-fredoka flex items-center gap-1"><Sparkles size={10} /> Rare</span>;
       default:
-        return <span className="badge-pill bg-emerald-100 text-emerald-900 text-[10px] font-fredoka">💚 Common</span>;
+        return <span className="badge-pill bg-emerald-100 text-emerald-900 text-[10px] font-fredoka">Common</span>;
     }
   };
 
@@ -76,23 +83,23 @@ export const CatShopModal: React.FC = () => {
         {/* MODAL HEADER */}
         <div className="px-6 py-4 bg-gradient-to-r from-[#ffe5a3] via-[#ffcad4] to-[#ffe5a3] border-b-3 border-[#ebd9c8] flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center text-2xl shadow-md border-2 border-[#523e32]">
-              🛍️
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-md border-2 border-[#523e32]">
+              <BoutiqueBagIcon size={22} />
             </div>
             <div>
               <h2 className="font-fredoka font-bold text-xl sm:text-2xl text-[#523e32] tracking-tight flex items-center gap-2">
                 ร้านค้าแฟชั่นแมว WeCats Boutique
               </h2>
               <p className="font-itim text-xs text-[#8d7568]">
-                ช้อปปิ้งของแต่งตัวสุดน่ารักและขนมแมวเลียพรีเมียมด้วยเหรียญปลาทู 🐟
+                ช้อปปิ้งของแต่งตัวสุดน่ารักและขนมแมวเลียพรีเมียมด้วยเหรียญปลาทู
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             {/* Fish Coins Counter Pill */}
-            <div className="flex items-center gap-2 bg-white/95 px-4 py-2 rounded-full border-2 border-[#523e32] shadow-sm">
-              <span className="text-lg">🐟</span>
+            <div className="flex items-center gap-1.5 bg-white/95 px-4 py-2 rounded-full border-2 border-[#523e32] shadow-sm">
+              <FishCoinIcon size={18} />
               <span className="font-fredoka font-extrabold text-base text-[#523e32]">
                 {fishCoins}
               </span>
@@ -127,7 +134,7 @@ export const CatShopModal: React.FC = () => {
                   : 'bg-white text-[#523e32] border-[#ebd9c8] hover:bg-[#fff9f0]'
               }`}
             >
-              <span>{tab.icon}</span>
+              {tab.icon}
               <span>{tab.label}</span>
             </button>
           ))}
@@ -153,7 +160,7 @@ export const CatShopModal: React.FC = () => {
                 <div className="flex items-center justify-between">
                   {getRarityBadge(item.rarity)}
                   <div className="flex items-center gap-1 font-fredoka font-bold text-sm text-[#523e32]">
-                    <span>🐟</span>
+                    <FishCoinIcon size={14} />
                     <span>{item.price}</span>
                   </div>
                 </div>
@@ -212,7 +219,7 @@ export const CatShopModal: React.FC = () => {
         {/* BOTTOM TIP BAR */}
         <div className="px-6 py-3 bg-[#fbf7f0] border-t-2 border-[#ebd9c8] flex items-center justify-between text-xs font-itim text-[#8d7568]">
           <div className="flex items-center gap-2">
-            <span>💡</span>
+            <Sparkles size={14} className="text-amber-500" />
             <span>หาเหรียญปลาทูเพิ่มได้จากการดูแลน้องแมว, แปรงขน, ดื่มน้ำพุ, และทำกิจกรรมใน Plaza!</span>
           </div>
           <span className="font-fredoka font-bold text-[#523e32]">

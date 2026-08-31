@@ -9,13 +9,17 @@ import {
   Award,
   Sparkles,
   Heart,
-  Shield,
   CheckCircle,
   Plus,
   ArrowRightLeft,
   Check,
-  Zap,
+  Trophy,
 } from 'lucide-react';
+import {
+  PassportBadgeIcon,
+  CatPawIcon,
+  FishCoinIcon,
+} from '@/components/ui/GameIcons';
 
 export const CatProfileModal: React.FC = () => {
   const isProfileOpen = useCatStore((state) => state.isProfileOpen);
@@ -66,8 +70,8 @@ export const CatProfileModal: React.FC = () => {
         {/* HEADER */}
         <div className="px-6 py-4 bg-gradient-to-r from-[#ffe5a3] via-[#ffcad4] to-[#ffe5a3] border-b-3 border-[#ebd9c8] flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center text-2xl shadow-md border-2 border-[#523e32]">
-              🪪
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-md border-2 border-[#523e32]">
+              <PassportBadgeIcon size={22} />
             </div>
             <div>
               <h3 className="font-fredoka font-bold text-lg sm:text-xl text-[#523e32]">
@@ -94,13 +98,14 @@ export const CatProfileModal: React.FC = () => {
               soundManager.playPop();
               setActiveTab('passport');
             }}
-            className={`btn-jelly px-4 py-1.5 rounded-full text-xs font-fredoka font-bold border-2 transition-all ${
+            className={`btn-jelly px-4 py-1.5 rounded-full text-xs font-fredoka font-bold border-2 transition-all flex items-center gap-1.5 ${
               activeTab === 'passport'
                 ? 'bg-[#523e32] text-white border-[#523e32] shadow-sm'
                 : 'bg-white text-[#523e32] border-[#ebd9c8]'
             }`}
           >
-            🪪 ข้อมูลพาสปอร์ต
+            <PassportBadgeIcon size={14} />
+            <span>ข้อมูลพาสปอร์ต</span>
           </button>
 
           <button
@@ -108,13 +113,14 @@ export const CatProfileModal: React.FC = () => {
               soundManager.playPop();
               setActiveTab('achievements');
             }}
-            className={`btn-jelly px-4 py-1.5 rounded-full text-xs font-fredoka font-bold border-2 transition-all ${
+            className={`btn-jelly px-4 py-1.5 rounded-full text-xs font-fredoka font-bold border-2 transition-all flex items-center gap-1.5 ${
               activeTab === 'achievements'
                 ? 'bg-[#523e32] text-white border-[#523e32] shadow-sm'
                 : 'bg-white text-[#523e32] border-[#ebd9c8]'
             }`}
           >
-            🏅 ตราความสำเร็จ ({achievements.filter((a) => a.isClaimed).length}/{achievements.length})
+            <Trophy size={14} />
+            <span>ตราความสำเร็จ ({achievements.filter((a) => a.isClaimed).length}/{achievements.length})</span>
           </button>
 
           <button
@@ -122,13 +128,14 @@ export const CatProfileModal: React.FC = () => {
               soundManager.playPop();
               setActiveTab('slots');
             }}
-            className={`btn-jelly px-4 py-1.5 rounded-full text-xs font-fredoka font-bold border-2 transition-all ${
+            className={`btn-jelly px-4 py-1.5 rounded-full text-xs font-fredoka font-bold border-2 transition-all flex items-center gap-1.5 ${
               activeTab === 'slots'
                 ? 'bg-[#523e32] text-white border-[#523e32] shadow-sm'
                 : 'bg-white text-[#523e32] border-[#ebd9c8]'
             }`}
           >
-            🐾 ช่องเลี้ยงแมว ({catSlots.length}/3)
+            <CatPawIcon size={14} color={activeTab === 'slots' ? '#FFFFFF' : '#523E32'} />
+            <span>ช่องเลี้ยงแมว ({catSlots.length}/3)</span>
           </button>
         </div>
 
@@ -139,8 +146,8 @@ export const CatProfileModal: React.FC = () => {
               
               {/* Top Cat ID Info */}
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#ffcad4] to-[#ffe5a3] border-2 border-[#523e32] flex items-center justify-center text-3xl shadow-md">
-                  🐱
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#ffcad4] to-[#ffe5a3] border-2 border-[#523e32] flex items-center justify-center shadow-md">
+                  <CatPawIcon size={32} color="#523e32" />
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
@@ -211,8 +218,9 @@ export const CatProfileModal: React.FC = () => {
                         {ach.description}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="badge-pill bg-amber-100 text-amber-900 text-[10px]">
-                          รางวัล: 🐟 {ach.rewardCoins} เหรียญ
+                        <span className="badge-pill bg-amber-100 text-amber-900 text-[10px] flex items-center gap-1">
+                          <FishCoinIcon size={12} />
+                          <span>รางวัล: {ach.rewardCoins} เหรียญ</span>
                         </span>
                         <span className="font-itim text-[11px] text-[#8d7568]">
                           ความคืบหน้า: {Math.min(ach.progress, ach.target)}/{ach.target}
@@ -222,15 +230,16 @@ export const CatProfileModal: React.FC = () => {
                   </div>
 
                   {ach.isClaimed ? (
-                    <div className="badge-pill bg-[#caeedf] text-[#2b7a5a] text-xs font-fredoka font-bold py-1 px-3">
-                      ✓ รับแล้ว
+                    <div className="badge-pill bg-[#caeedf] text-[#2b7a5a] text-xs font-fredoka font-bold py-1 px-3 flex items-center gap-1">
+                      <Check size={13} />
+                      <span>รับแล้ว</span>
                     </div>
                   ) : isCompleted ? (
                     <button
                       onClick={() => handleClaim(ach.id)}
                       className="btn-jelly px-4 py-2 rounded-2xl bg-[#ffe5a3] hover:bg-[#ffd166] text-[#523e32] border-2 border-[#523e32] text-xs font-fredoka font-bold shadow-md"
                     >
-                      🎁 รับรางวัล!
+                      รับรางวัล!
                     </button>
                   ) : (
                     <div className="text-xs font-itim text-[#8d7568]">
@@ -247,7 +256,7 @@ export const CatProfileModal: React.FC = () => {
         {activeTab === 'slots' && (
           <div className="p-6 overflow-y-auto max-h-[58vh] space-y-4">
             <p className="font-itim text-xs text-[#8d7568]">
-              คุณสามารถรับเลี้ยงน้องแมวได้สูงสุด 3 ตัวใน 1 บัญชี และเลือกสลับตัวพาออกมาเดินเล่นใน Plaza ได้อิสระ 🐾
+              คุณสามารถรับเลี้ยงน้องแมวได้สูงสุด 3 ตัวใน 1 บัญชี และเลือกสลับตัวพาออกมาเดินเล่นใน Plaza ได้อิสระ
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -266,8 +275,8 @@ export const CatProfileModal: React.FC = () => {
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-white border-2 border-[#523e32] flex items-center justify-center text-2xl shadow-sm">
-                          🐱
+                        <div className="w-12 h-12 rounded-2xl bg-white border-2 border-[#523e32] flex items-center justify-center shadow-sm">
+                          <CatPawIcon size={24} color="#523e32" />
                         </div>
                         <div>
                           <h4 className="font-fredoka font-bold text-sm text-[#523e32]">
@@ -320,7 +329,7 @@ export const CatProfileModal: React.FC = () => {
                         className="btn-jelly px-4 py-1.5 rounded-xl bg-[#caeedf] hover:bg-[#b7e4c7] text-[#2b7a5a] font-fredoka font-bold text-xs border border-[#2b7a5a]/20 flex items-center gap-1 shadow-sm"
                       >
                         <Plus size={13} />
-                        <span>รับเลี้ยงตัวใหม่ 🌸</span>
+                        <span>รับเลี้ยงตัวใหม่</span>
                       </button>
                     </div>
                   );

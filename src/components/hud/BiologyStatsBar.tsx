@@ -2,9 +2,20 @@
 
 import React from 'react';
 import { useCatStore } from '@/store/catStore';
-import { Heart, Droplets, Utensils, Sparkles, Moon, Zap, Scale } from 'lucide-react';
+import {
+  CatPawIcon,
+  FoodBowlIcon,
+  WaterDropIcon,
+  PetHeartIcon,
+  GroomBrushIcon,
+  LaserZapIcon,
+} from '@/components/ui/GameIcons';
 
-export const BiologyStatsBar: React.FC = () => {
+interface BiologyStatsBarProps {
+  isAuthLoading?: boolean;
+}
+
+export const BiologyStatsBar: React.FC<BiologyStatsBarProps> = ({ isAuthLoading = false }) => {
   const myCat = useCatStore((state) => state.myCat);
   const stats = useCatStore((state) => state.stats);
 
@@ -17,14 +28,45 @@ export const BiologyStatsBar: React.FC = () => {
 
   const chonkInfo = getChonkyLabel(stats.weightKg);
 
+  if (isAuthLoading) {
+    return (
+      <div className="w-full max-w-4xl bg-white/90 backdrop-blur-md px-6 py-3.5 rounded-3xl border-3 border-[#ebd9c8] shadow-lg flex flex-wrap items-center justify-between gap-4 pointer-events-auto animate-pulse">
+        {/* Skeleton Profile */}
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-[#ebd9c8]/70 border-2 border-[#ebd9c8]" />
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <div className="w-20 h-4 rounded-md bg-[#ebd9c8]/70" />
+              <div className="w-16 h-3.5 rounded-md bg-[#ebd9c8]/50" />
+            </div>
+            <div className="w-24 h-2 rounded-full bg-[#ebd9c8]/50" />
+          </div>
+        </div>
+
+        {/* Skeleton Gauges */}
+        <div className="flex items-center gap-4 sm:gap-6 flex-1 justify-end flex-wrap">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-[#ebd9c8]/60" />
+              <div className="space-y-1">
+                <div className="w-12 h-2.5 rounded-md bg-[#ebd9c8]/60" />
+                <div className="w-16 sm:w-20 h-2 rounded-full bg-[#ebd9c8]/40" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full max-w-4xl bg-white/90 backdrop-blur-md px-6 py-3.5 rounded-3xl border-3 border-[#ebd9c8] shadow-lg flex flex-wrap items-center justify-between gap-4 pointer-events-auto">
+    <div className="w-full max-w-4xl bg-white/90 backdrop-blur-md px-6 py-3.5 rounded-3xl border-3 border-[#ebd9c8] shadow-lg flex flex-wrap items-center justify-between gap-4 pointer-events-auto animate-in fade-in">
       
       {/* 1. Profile & Affection Level */}
       <div className="flex items-center gap-3">
         <div className="relative">
-          <div className="w-12 h-12 rounded-2xl bg-[#ffcad4] border-2 border-[#523e32] flex items-center justify-center text-2xl shadow-inner">
-            🐱
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#ffcad4] to-[#ffe5a3] border-2 border-[#523e32] flex items-center justify-center shadow-inner">
+            <CatPawIcon size={24} color="#523e32" />
           </div>
           <span className="absolute -bottom-1.5 -right-1.5 bg-[#ffe5a3] border border-[#523e32] text-[#523e32] text-[10px] font-fredoka font-bold px-1.5 py-0.2 rounded-full">
             Lv.{stats.affectionLevel}
@@ -54,8 +96,8 @@ export const BiologyStatsBar: React.FC = () => {
         
         {/* Hunger */}
         <div className="flex items-center gap-2" title="ความอิ่ม (Hunger)">
-          <div className="w-8 h-8 rounded-xl bg-[#ffe4e9] border border-[#523e32]/20 flex items-center justify-center text-sm shadow-sm">
-            🐟
+          <div className="w-8 h-8 rounded-xl bg-[#ffe4e9] border border-[#523e32]/20 flex items-center justify-center shadow-sm">
+            <FoodBowlIcon size={18} />
           </div>
           <div className="space-y-0.5">
             <div className="flex justify-between text-[11px] font-fredoka font-bold text-[#523e32]">
@@ -73,8 +115,8 @@ export const BiologyStatsBar: React.FC = () => {
 
         {/* Hydration */}
         <div className="flex items-center gap-2" title="น้ำดื่ม (Hydration)">
-          <div className="w-8 h-8 rounded-xl bg-[#e8f4fc] border border-[#523e32]/20 flex items-center justify-center text-sm shadow-sm">
-            💧
+          <div className="w-8 h-8 rounded-xl bg-[#e8f4fc] border border-[#523e32]/20 flex items-center justify-center shadow-sm">
+            <WaterDropIcon size={18} />
           </div>
           <div className="space-y-0.5">
             <div className="flex justify-between text-[11px] font-fredoka font-bold text-[#523e32]">
@@ -92,8 +134,8 @@ export const BiologyStatsBar: React.FC = () => {
 
         {/* Happiness */}
         <div className="flex items-center gap-2" title="ความสุขและเสียงกรน (Happiness)">
-          <div className="w-8 h-8 rounded-xl bg-[#fff0f3] border border-[#523e32]/20 flex items-center justify-center text-sm shadow-sm">
-            💖
+          <div className="w-8 h-8 rounded-xl bg-[#fff0f3] border border-[#523e32]/20 flex items-center justify-center shadow-sm">
+            <PetHeartIcon size={18} />
           </div>
           <div className="space-y-0.5">
             <div className="flex justify-between text-[11px] font-fredoka font-bold text-[#523e32]">
@@ -111,8 +153,8 @@ export const BiologyStatsBar: React.FC = () => {
 
         {/* Hygiene / Grooming */}
         <div className="flex items-center gap-2" title="ความสะอาดขน ป้องกันก้อนขน (Hygiene)">
-          <div className="w-8 h-8 rounded-xl bg-[#e5f8f0] border border-[#523e32]/20 flex items-center justify-center text-sm shadow-sm">
-            ✨
+          <div className="w-8 h-8 rounded-xl bg-[#e5f8f0] border border-[#523e32]/20 flex items-center justify-center shadow-sm">
+            <GroomBrushIcon size={18} />
           </div>
           <div className="space-y-0.5">
             <div className="flex justify-between text-[11px] font-fredoka font-bold text-[#523e32]">
@@ -130,10 +172,10 @@ export const BiologyStatsBar: React.FC = () => {
 
         {/* Zoomies Energy */}
         <div className="flex items-center gap-2" title="พลังงาน Zoomies">
-          <div className={`w-8 h-8 rounded-xl border flex items-center justify-center text-sm shadow-sm transition-all ${
+          <div className={`w-8 h-8 rounded-xl border flex items-center justify-center shadow-sm transition-all ${
             stats.isZooming ? 'bg-amber-400 border-amber-600 animate-bounce' : 'bg-[#fff6d6] border-[#523e32]/20'
           }`}>
-            ⚡
+            <LaserZapIcon size={18} />
           </div>
           <div className="space-y-0.5">
             <div className="flex justify-between text-[11px] font-fredoka font-bold text-[#523e32]">

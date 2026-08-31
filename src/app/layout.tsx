@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'WeCats (MeowVerse) - 2D Cozy Cat Sim MMO',
+  title: 'WeCats by Pongsapak',
   description: 'เกมเลี้ยงแมว 2D สไตล์ Pastel สุดน่ารัก ปรับแต่งแมวได้อิสระ พร้อมระบบสถิติสมจริง และเดินเล่นออนไลน์กับเพื่อนๆ ใน Cat Plaza',
 };
 

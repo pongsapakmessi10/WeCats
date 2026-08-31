@@ -10,10 +10,17 @@ import {
   DiaryEntry,
   SavedPhoto,
   FriendData,
+  FriendRequest,
+  DirectMessage,
   Achievement,
   CatSlot,
   RoomData,
 } from '@/types/game';
+import {
+  broadcastLiveFriendRequest,
+  broadcastLiveFriendAccepted,
+  broadcastLiveDirectMessage,
+} from '@/game/multiplayer/broadcast';
 
 export const SHOP_CATALOG: ShopItem[] = [
   // HATS
@@ -162,123 +169,6 @@ const DEFAULT_STATS: CatStats = {
   lastSlept: Date.now(),
 };
 
-const MOCK_ONLINE_CATS: OnlineCat[] = [
-  {
-    id: 'cat-kiki',
-    isSelf: false,
-    customization: {
-      name: 'Kiki (กิกิ)',
-      gender: 'girl',
-      breed: 'calico',
-      bodyType: 'slim',
-      earType: 'folded',
-      tailType: 'straight',
-      eyeType: 'round',
-      eyeColorLeft: '#06d6a0',
-      eyeColorRight: '#06d6a0',
-      baseColor: '#ffffff',
-      patternType: 'calico',
-      patternColor: '#e76f51',
-      snoutColor: '#ffffff',
-      pawColor: '#f4a261',
-      bellyColor: '#ffffff',
-      accessoryHead: 'flower_crown',
-      accessoryNeck: 'red_ribbon',
-      accessoryBack: 'butterfly_wings',
-      accessoryFace: 'none',
-      aura: 'hearts',
-      personality: 'cuddly',
-    },
-    stats: { ...DEFAULT_STATS, happiness: 95 },
-    x: 480,
-    y: 360,
-    vx: 0,
-    vy: 0,
-    direction: 'down',
-    behavior: 'idle',
-    currentEmote: '💖',
-    emoteTimer: 200,
-    chatMessage: 'สวัสดีจ้า~ มาเดินเล่นด้วยกันนะ!',
-    chatTimer: 180,
-  },
-  {
-    id: 'cat-luna',
-    isSelf: false,
-    customization: {
-      name: 'Luna (ลูน่า)',
-      gender: 'girl',
-      breed: 'black_cat',
-      bodyType: 'normal',
-      earType: 'pointed',
-      tailType: 'fluffy',
-      eyeType: 'almond',
-      eyeColorLeft: '#ffd166',
-      eyeColorRight: '#ffd166',
-      baseColor: '#2b2d42',
-      patternType: 'solid',
-      patternColor: '#1d1e2c',
-      snoutColor: '#2b2d42',
-      pawColor: '#2b2d42',
-      bellyColor: '#2b2d42',
-      accessoryHead: 'wizard_hat',
-      accessoryNeck: 'pink_scarf',
-      accessoryBack: 'none',
-      accessoryFace: 'none',
-      aura: 'sparkles',
-      personality: 'noble',
-    },
-    stats: { ...DEFAULT_STATS, happiness: 88 },
-    x: 650,
-    y: 280,
-    vx: 0,
-    vy: 0,
-    direction: 'left',
-    behavior: 'sleeping',
-    currentEmote: '💤',
-    emoteTimer: 150,
-    chatMessage: 'งึมๆ แดดอุ่นจังเลย...',
-    chatTimer: 120,
-  },
-  {
-    id: 'cat-tiger',
-    isSelf: false,
-    customization: {
-      name: 'Tiger (เสือน้อย)',
-      gender: 'boy',
-      breed: 'bengal',
-      bodyType: 'chonky',
-      earType: 'pointed',
-      tailType: 'fluffy',
-      eyeType: 'sparkle',
-      eyeColorLeft: '#118ab2',
-      eyeColorRight: '#ffbe0b',
-      baseColor: '#e09f3e',
-      patternType: 'tiger',
-      patternColor: '#540b0e',
-      snoutColor: '#fff3bf',
-      pawColor: '#fff3bf',
-      bellyColor: '#fff3bf',
-      accessoryHead: 'none',
-      accessoryNeck: 'bowtie',
-      accessoryBack: 'toast_slice',
-      accessoryFace: 'sunglasses',
-      aura: 'music_notes',
-      personality: 'chaotic',
-    },
-    stats: { ...DEFAULT_STATS, isZooming: true, zoomiesEnergy: 95 },
-    x: 320,
-    y: 520,
-    vx: 2,
-    vy: 0,
-    direction: 'right',
-    behavior: 'zoomies',
-    currentEmote: '⚡',
-    emoteTimer: 150,
-    chatMessage: 'Zoomies time!! วิ่งงงง 💨',
-    chatTimer: 160,
-  },
-];
-
 export const PLAZA_PROPS: InteractiveProp[] = [
   {
     id: 'prop-fountain',
@@ -359,6 +249,10 @@ interface CatStoreState {
   stats: CatStats;
   onlineCats: OnlineCat[];
   chatMessages: ChatMessage[];
+  chatMessagesByRoom: Record<string, ChatMessage[]>;
+  unreadChatCount: number;
+  isChatExpanded: boolean;
+  myCatChat: { text: string | null; emote: string | null };
   
   // Economy & Shop
   fishCoins: number;
@@ -371,9 +265,13 @@ interface CatStoreState {
   achievements: Achievement[];
   isDiaryOpen: boolean;
 
-  // Social
+  // Social & Friend Requests
   friends: FriendData[];
+  pendingFriendRequests: FriendRequest[];
+  directMessages: Record<string, DirectMessage[]>;
+  activeDirectChatFriend: FriendData | null;
   isFriendsOpen: boolean;
+  isDirectChatOpen: boolean;
 
   // Multi-Cat Slots
   currentSlotIndex: number;
@@ -389,15 +287,20 @@ interface CatStoreState {
   notificationText: string;
   timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night';
   currentRoom: RoomData;
+  roomDeletedModal: { isOpen: boolean; roomName: string };
 
   // Modal Setters
   setCurrentRoom: (room: RoomData) => void;
+  setRoomDeletedModal: (data: { isOpen: boolean; roomName: string }) => void;
+  kickToSakuraPlaza: (roomName?: string) => void;
   setCustomizerOpen: (open: boolean) => void;
   setProfileOpen: (open: boolean) => void;
   setPhotoMode: (photo: boolean) => void;
   setShopOpen: (open: boolean) => void;
   setDiaryOpen: (open: boolean) => void;
   setFriendsOpen: (open: boolean) => void;
+  setDirectChatOpen: (open: boolean) => void;
+  setActiveDirectChatFriend: (friend: FriendData | null) => void;
   toggleSound: () => void;
 
   // Economy Actions
@@ -411,6 +314,13 @@ interface CatStoreState {
 
   // Social Actions
   addFriend: (cat: OnlineCat) => void;
+  addFriendFromPeer: (friend: FriendData) => void;
+  sendFriendRequestToCat: (targetCat: OnlineCat) => void;
+  receiveFriendRequest: (request: FriendRequest) => void;
+  acceptFriendRequest: (requestId: string) => void;
+  declineFriendRequest: (requestId: string) => void;
+  sendDirectMessage: (friendId: string, text: string) => void;
+  receiveDirectMessage: (msg: DirectMessage) => void;
   sendTreatToFriend: (friendId: string) => void;
 
   // Achievement Actions
@@ -433,6 +343,9 @@ interface CatStoreState {
   allogroomCat: (targetId: string) => void;
   sendChatMessage: (text: string) => void;
   sendEmote: (emote: string) => void;
+  receiveChatMessage: (senderId: string, senderName: string, text: string, roomId?: string) => void;
+  setIsChatExpanded: (expanded: boolean) => void;
+  clearUnreadChat: () => void;
   setSelectedNearbyCat: (cat: OnlineCat | null) => void;
   setOnlineCats: (catsOrUpdater: OnlineCat[] | ((prev: OnlineCat[]) => OnlineCat[])) => void;
   setActiveNearbyProp: (prop: InteractiveProp | null) => void;
@@ -443,16 +356,30 @@ interface CatStoreState {
 export const useCatStore = create<CatStoreState>((set, get) => ({
   myCat: DEFAULT_CAT,
   stats: DEFAULT_STATS,
-  onlineCats: MOCK_ONLINE_CATS,
+  onlineCats: [],
   chatMessages: [
     {
-      id: 'msg-1',
-      senderId: 'cat-kiki',
-      senderName: 'Kiki (กิกิ)',
-      text: 'ยินดีต้อนรับสู่ WeCats Plaza จ้า! เดินเล่นรอบๆ ได้เลยนะ 🌸',
-      timestamp: Date.now() - 60000,
+      id: 'msg-welcome',
+      senderId: 'system',
+      senderName: 'ระบบ WeCats',
+      text: 'ยินดีต้อนรับสู่ WeCats Plaza! วิ่งเล่นและพบปะเพื่อนแมวออนไลน์ได้เลย 🌸',
+      timestamp: Date.now(),
     },
   ],
+  chatMessagesByRoom: {
+    'public-sakura': [
+      {
+        id: 'msg-welcome-sakura',
+        senderId: 'system',
+        senderName: 'ระบบ Plaza',
+        text: 'ยินดีต้อนรับสู่ สวนซากุระ Plaza #1! วิ่งเล่นและคุยกับเพื่อนแมวได้เลย 🌸',
+        timestamp: Date.now(),
+      },
+    ],
+  },
+  unreadChatCount: 0,
+  isChatExpanded: true,
+  myCatChat: { text: null, emote: null },
 
   // Economy & Shop
   fishCoins: 150,
@@ -475,18 +402,13 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   achievements: INITIAL_ACHIEVEMENTS,
   isDiaryOpen: false,
 
-  // Social
-  friends: [
-    {
-      id: 'cat-kiki',
-      username: 'KikiCat',
-      catName: 'Kiki (กิกิ)',
-      breed: 'calico',
-      isOnline: true,
-      friendshipPoints: 25,
-    },
-  ],
+  // Social (Real Online Friends Only)
+  friends: [],
+  pendingFriendRequests: [],
+  directMessages: {},
+  activeDirectChatFriend: null,
   isFriendsOpen: false,
+  isDirectChatOpen: false,
 
   // Multi-Cat Slots
   currentSlotIndex: 0,
@@ -509,11 +431,12 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   timeOfDay: 'morning',
   currentRoom: {
     id: 'public-sakura',
-    name: 'Plaza #1: สวนซากุระ 🌸',
+    name: 'Plaza #1: สวนซากุระ',
     type: 'public',
     theme: 'sakura',
     maxCapacity: 20,
   },
+  roomDeletedModal: { isOpen: false, roomName: '' },
 
   // Modal Setters
   setCurrentRoom: (room) => {
@@ -521,19 +444,69 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
     if (room.theme === 'moonlight') timeOfDay = 'night';
     else if (room.theme === 'sunshine') timeOfDay = 'afternoon';
 
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('wecats_current_room', JSON.stringify(room));
+      } catch {}
+    }
+
+    const currentByRoom = { ...get().chatMessagesByRoom };
+    if (!currentByRoom[room.id]) {
+      currentByRoom[room.id] = [
+        {
+          id: `msg-welcome-${room.id}`,
+          senderId: 'system',
+          senderName: 'ระบบ WeCats',
+          text: `ยินดีต้อนรับสู่ห้อง "${room.name}"! แชทสดและส่ง Emote เฉพาะในห้องนี้ได้เลย 🐾✨`,
+          timestamp: Date.now(),
+        },
+      ];
+    }
+    const activeMessages = currentByRoom[room.id] || [];
+
     set({
       currentRoom: room,
       onlineCats: [], // reset room members for new room
       timeOfDay,
+      chatMessagesByRoom: currentByRoom,
+      chatMessages: activeMessages,
+      unreadChatCount: 0,
     });
     get().setNotification(`ย้ายเข้าสู่ห้อง "${room.name}" สำเร็จ! 🐾`);
   },
+
+  setRoomDeletedModal: (data) => set({ roomDeletedModal: data }),
+
+  kickToSakuraPlaza: (roomName = 'ห้องส่วนตัว') => {
+    const defaultSakura: RoomData = {
+      id: 'public-sakura',
+      name: 'Plaza #1: สวนซากุระ',
+      type: 'public',
+      theme: 'sakura',
+      maxCapacity: 20,
+    };
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('wecats_current_room', JSON.stringify(defaultSakura));
+      } catch {}
+    }
+    set({
+      currentRoom: defaultSakura,
+      onlineCats: [],
+      timeOfDay: 'morning',
+      roomDeletedModal: { isOpen: true, roomName },
+      notificationText: `🚪 ห้อง "${roomName}" ถูกลบแล้ว! กำลังพาน้องแมวกลับสู่สวนซากุระ...`,
+    });
+  },
+
   setCustomizerOpen: (open) => set({ isCustomizerOpen: open }),
   setProfileOpen: (open) => set({ isProfileOpen: open }),
   setPhotoMode: (photo) => set({ isPhotoMode: photo }),
   setShopOpen: (open) => set({ isShopOpen: open }),
   setDiaryOpen: (open) => set({ isDiaryOpen: open }),
   setFriendsOpen: (open) => set({ isFriendsOpen: open }),
+  setDirectChatOpen: (open) => set({ isDirectChatOpen: open }),
+  setActiveDirectChatFriend: (friend) => set({ activeDirectChatFriend: friend, isDirectChatOpen: !!friend }),
   toggleSound: () => set((state) => ({ isSoundEnabled: !state.isSoundEnabled })),
 
   // Economy Actions
@@ -638,13 +611,108 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
         username: cat.customization.name,
         catName: cat.customization.name,
         breed: cat.customization.breed,
+        customization: cat.customization,
         isOnline: true,
-        friendshipPoints: 10,
+        friendshipPoints: 20,
       };
       state.addDiaryEntry(`ได้เพื่อนใหม่: ${cat.customization.name} 🤝`, `ผูกมิตรกับเพื่อนแมวใน Plaza เรียบร้อยแล้ว`, '🤝', 20, 'social');
       state.addFishCoins(20);
       return { friends: [...state.friends, newFriend] };
     });
+  },
+
+  addFriendFromPeer: (friend) => {
+    set((state) => {
+      if (state.friends.some((f) => f.id === friend.id || f.catName === friend.catName)) return state;
+      state.addDiaryEntry(`ได้เพื่อนใหม่: ${friend.catName} 🤝`, `ผูกมิตรกับเพื่อนแมวใน Plaza เรียบร้อยแล้ว`, '🤝', 20, 'social');
+      state.addFishCoins(20);
+      return { friends: [...state.friends, friend] };
+    });
+  },
+
+  sendFriendRequestToCat: (targetCat) => {
+    const isAlreadyFriend = get().friends.some((f) => f.id === targetCat.id);
+    if (isAlreadyFriend) {
+      get().setNotification(`คุณและ ${targetCat.customization.name} เป็นเพื่อนกันอยู่แล้ว 💕`);
+      return;
+    }
+    broadcastLiveFriendRequest(targetCat.id);
+    get().setNotification(`ส่งคำขอเป็นเพื่อนไปยัง ${targetCat.customization.name} แล้ว! 💌 รอการตอบรับ`);
+  },
+
+  receiveFriendRequest: (request) => {
+    set((state) => {
+      if (state.pendingFriendRequests.some((r) => r.id === request.id || r.senderId === request.senderId)) {
+        return state;
+      }
+      return {
+        pendingFriendRequests: [request, ...state.pendingFriendRequests],
+      };
+    });
+  },
+
+  acceptFriendRequest: (requestId) => {
+    const req = get().pendingFriendRequests.find((r) => r.id === requestId);
+    if (!req) return;
+
+    broadcastLiveFriendAccepted(req.senderId);
+
+    const newFriend: FriendData = {
+      id: req.senderId,
+      username: req.senderName,
+      catName: req.senderName,
+      breed: req.senderCustomization.breed,
+      customization: req.senderCustomization,
+      isOnline: true,
+      friendshipPoints: 20,
+    };
+
+    set((state) => ({
+      pendingFriendRequests: state.pendingFriendRequests.filter((r) => r.id !== requestId),
+      friends: state.friends.some((f) => f.id === req.senderId) ? state.friends : [...state.friends, newFriend],
+    }));
+
+    get().addDiaryEntry(`ตอบรับคำขอเป็นเพื่อนกับ ${req.senderName} 💕`, 'กลายเป็นเพื่อนสนิทใน WeCats Plaza!', '💕', 25, 'social');
+    get().addFishCoins(25);
+    get().setNotification(`ยอมรับคำขอเป็นเพื่อนกับ ${req.senderName} แล้ว! 💕 เป็นเพื่อนกันแล้ว`);
+  },
+
+  declineFriendRequest: (requestId) => {
+    set((state) => ({
+      pendingFriendRequests: state.pendingFriendRequests.filter((r) => r.id !== requestId),
+    }));
+    get().setNotification('ปฏิเสธคำขอเป็นเพื่อนแล้ว');
+  },
+
+  sendDirectMessage: (friendId, text) => {
+    const myCat = get().myCat;
+    const dm: DirectMessage = {
+      id: `dm-${Date.now()}`,
+      fromPeerId: 'self',
+      toPeerId: friendId,
+      senderName: myCat.name,
+      text,
+      timestamp: Date.now(),
+    };
+
+    broadcastLiveDirectMessage(friendId, text);
+
+    set((state) => ({
+      directMessages: {
+        ...state.directMessages,
+        [friendId]: [...(state.directMessages[friendId] || []), dm],
+      },
+    }));
+  },
+
+  receiveDirectMessage: (msg) => {
+    const friendKey = msg.fromPeerId;
+    set((state) => ({
+      directMessages: {
+        ...state.directMessages,
+        [friendKey]: [...(state.directMessages[friendKey] || []), msg],
+      },
+    }));
   },
 
   sendTreatToFriend: (friendId) => {
@@ -896,6 +964,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   },
 
   sendChatMessage: (text) => {
+    const roomId = get().currentRoom.id;
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderId: 'self',
@@ -903,12 +972,25 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       text,
       timestamp: Date.now(),
     };
-    set((state) => ({
-      chatMessages: [...state.chatMessages, newMsg],
-    }));
+    set((state) => {
+      const roomMsgs = [...(state.chatMessagesByRoom[roomId] || []), newMsg];
+      return {
+        chatMessagesByRoom: {
+          ...state.chatMessagesByRoom,
+          [roomId]: roomMsgs,
+        },
+        chatMessages: roomMsgs,
+        myCatChat: { text, emote: null },
+      };
+    });
+
+    setTimeout(() => {
+      set({ myCatChat: { text: null, emote: null } });
+    }, 4500);
   },
 
   sendEmote: (emote) => {
+    const roomId = get().currentRoom.id;
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderId: 'self',
@@ -917,9 +999,58 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       timestamp: Date.now(),
       isEmote: true,
     };
+    set((state) => {
+      const roomMsgs = [...(state.chatMessagesByRoom[roomId] || []), newMsg];
+      return {
+        chatMessagesByRoom: {
+          ...state.chatMessagesByRoom,
+          [roomId]: roomMsgs,
+        },
+        chatMessages: roomMsgs,
+        myCatChat: { text: null, emote },
+      };
+    });
+
+    setTimeout(() => {
+      set({ myCatChat: { text: null, emote: null } });
+    }, 4500);
+  },
+
+  receiveChatMessage: (senderId, senderName, text, targetRoomId) => {
+    const roomId = targetRoomId || get().currentRoom.id;
+    const newMsg: ChatMessage = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      senderId,
+      senderName,
+      text,
+      timestamp: Date.now(),
+    };
+    set((state) => {
+      const roomMsgs = [...(state.chatMessagesByRoom[roomId] || []), newMsg];
+      const isCurrent = state.currentRoom.id === roomId;
+      const isExpanded = state.isChatExpanded;
+      const newUnread = isCurrent && !isExpanded ? state.unreadChatCount + 1 : state.unreadChatCount;
+
+      return {
+        chatMessagesByRoom: {
+          ...state.chatMessagesByRoom,
+          [roomId]: roomMsgs,
+        },
+        chatMessages: isCurrent ? roomMsgs : state.chatMessages,
+        unreadChatCount: newUnread,
+      };
+    });
+  },
+
+  setIsChatExpanded: (expanded) => {
     set((state) => ({
-      chatMessages: [...state.chatMessages, newMsg],
+      isChatExpanded: expanded,
+      unreadChatCount: expanded ? 0 : state.unreadChatCount,
     }));
+  },
+
+  clearUnreadChat: () => {
+    set({ unreadChatCount: 0 });
   },
 
   setSelectedNearbyCat: (cat) => set({ selectedNearbyCat: cat }),

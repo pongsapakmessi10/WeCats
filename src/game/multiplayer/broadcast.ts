@@ -1,55 +1,61 @@
-import { getPusherClient } from '@/lib/pusherClient';
 import { useCatStore } from '@/store/catStore';
+import { broadcastP2PPacket } from './p2pManager';
 
 export async function broadcastLiveChat(text?: string, emote?: string) {
+  const myCat = useCatStore.getState().myCat;
   const currentRoom = useCatStore.getState().currentRoom;
-  const channelName = currentRoom.id.startsWith('presence-')
-    ? `presence-${currentRoom.id.replace(/^presence-/, '').replace(/[^a-zA-Z0-9_-]/g, '_')}`
-    : `presence-${currentRoom.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-
-  const pusher = getPusherClient();
-  const socketId = pusher?.connection?.socket_id;
-
-  try {
-    await fetch('/api/pusher/events', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        channel: channelName,
-        event: 'cat-chat',
-        data: {
-          text,
-          emote,
-          senderName: useCatStore.getState().myCat.name,
-        },
-        socketId,
-      }),
-    });
-  } catch {}
+  broadcastP2PPacket({
+    type: 'cat-chat',
+    roomId: currentRoom.id,
+    text,
+    emote,
+    senderName: myCat.name,
+  });
 }
 
-export async function broadcastLiveFriendAction(type: 'request' | 'treat') {
+export async function broadcastLiveFriendRequest(targetPeerId: string) {
+  const myCat = useCatStore.getState().myCat;
   const currentRoom = useCatStore.getState().currentRoom;
-  const channelName = currentRoom.id.startsWith('presence-')
-    ? `presence-${currentRoom.id.replace(/^presence-/, '').replace(/[^a-zA-Z0-9_-]/g, '_')}`
-    : `presence-${currentRoom.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+  broadcastP2PPacket({
+    type: 'friend-request',
+    roomId: currentRoom.id,
+    targetPeerId,
+    senderName: myCat.name,
+    senderCustomization: myCat,
+  });
+}
 
-  const pusher = getPusherClient();
-  const socketId = pusher?.connection?.socket_id;
+export async function broadcastLiveFriendAccepted(targetPeerId: string) {
+  const myCat = useCatStore.getState().myCat;
+  const currentRoom = useCatStore.getState().currentRoom;
+  broadcastP2PPacket({
+    type: 'friend-accepted',
+    roomId: currentRoom.id,
+    targetPeerId,
+    senderName: myCat.name,
+    senderCustomization: myCat,
+  });
+}
 
-  try {
-    await fetch('/api/pusher/events', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        channel: channelName,
-        event: 'cat-friend-action',
-        data: {
-          type,
-          senderName: useCatStore.getState().myCat.name,
-        },
-        socketId,
-      }),
-    });
-  } catch {}
+export async function broadcastLiveDirectMessage(targetPeerId: string, text: string) {
+  const myCat = useCatStore.getState().myCat;
+  const currentRoom = useCatStore.getState().currentRoom;
+  broadcastP2PPacket({
+    type: 'direct-message',
+    roomId: currentRoom.id,
+    toPeerId: targetPeerId,
+    text,
+    senderName: myCat.name,
+  });
+}
+
+export async function broadcastLiveFriendAction(actionType: 'request' | 'treat') {
+  const myCat = useCatStore.getState().myCat;
+  const currentRoom = useCatStore.getState().currentRoom;
+  broadcastP2PPacket({
+    type: 'cat-friend-action',
+    roomId: currentRoom.id,
+    actionType,
+    senderName: myCat.name,
+  });
 }

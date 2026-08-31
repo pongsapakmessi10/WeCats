@@ -16,6 +16,9 @@ export const getPusherClient = (): PusherClient | null => {
     pusherClientInstance = new PusherClient(key, {
       cluster,
       authEndpoint: '/api/pusher/auth',
+      forceTLS: true,
+      activityTimeout: 120000,
+      pongTimeout: 30000,
     });
   }
 

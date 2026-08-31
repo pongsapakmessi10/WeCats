@@ -12,16 +12,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required event fields' }, { status: 400 });
     }
 
+    // Preserve the client-provided senderId (which matches Pusher presence user_id)
     const payload = {
       ...data,
-      senderId: session?.userId || data.senderId,
-      senderName: session?.username || data.senderName,
+      senderId: data.senderId || session?.userId,
+      senderName: data.senderName || session?.username,
       timestamp: Date.now(),
     };
 
-    // Trigger event to all clients in channel (optionally exclude sender socketId)
+    // Trigger event to all clients in channel (exclude sender socketId so sender doesn't process own event twice)
     if (process.env.PUSHER_APP_ID && process.env.PUSHER_KEY && process.env.PUSHER_SECRET) {
-      await pusherServer.trigger(channel, event, payload, socketId ? { socket_id: socketId } : undefined);
+      await pusherServer.trigger(
+        channel,
+        event,
+        payload,
+        socketId ? { socket_id: socketId } : undefined
+      );
     }
 
     return NextResponse.json({ success: true });

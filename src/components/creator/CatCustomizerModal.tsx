@@ -21,6 +21,7 @@ import {
   PersonalityType,
 } from '@/types/game';
 import { Sparkles, Heart, Shuffle, Check, X, Palette, Shirt, Cat, Flame } from 'lucide-react';
+import { broadcastP2PPacket } from '@/game/multiplayer/p2pManager';
 
 const PASTEL_COLOR_SWATCHES = [
   '#ffa94d', // Orange Tabby
@@ -47,20 +48,23 @@ const EYE_COLOR_SWATCHES = [
 
 const ColorPickerInput: React.FC<{
   label: string;
-  value: string;
+  value?: string;
   onChange: (color: string) => void;
   swatches?: string[];
-}> = ({ label, value, onChange, swatches = PASTEL_COLOR_SWATCHES }) => {
+}> = ({ label, value = '#ffa94d', onChange, swatches = PASTEL_COLOR_SWATCHES }) => {
+  const safeValue = typeof value === 'string' && value.startsWith('#') ? value : '#ffa94d';
+  const displayHex = typeof value === 'string' ? value : safeValue;
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <label className="font-itim font-bold text-xs text-[#523e32]">{label}</label>
         {/* Hex Code & Color Picker Pill */}
         <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border-2 border-[#ebd9c8] shadow-sm">
-          <label className="relative w-5 h-5 rounded-lg border-2 border-[#523e32]/50 overflow-hidden shadow-inner cursor-pointer" style={{ backgroundColor: value }}>
+          <label className="relative w-5 h-5 rounded-lg border-2 border-[#523e32]/50 overflow-hidden shadow-inner cursor-pointer" style={{ backgroundColor: safeValue }}>
             <input
               type="color"
-              value={value.startsWith('#') && value.length === 7 ? value : '#ffa94d'}
+              value={safeValue.length === 7 ? safeValue : '#ffa94d'}
               onChange={(e) => onChange(e.target.value)}
               className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
               title="คลิกเพื่อเลือกสีอิสระ (Color Wheel)"
@@ -68,7 +72,7 @@ const ColorPickerInput: React.FC<{
           </label>
           <input
             type="text"
-            value={value}
+            value={displayHex}
             onChange={(e) => onChange(e.target.value)}
             placeholder="#FFA94D"
             maxLength={7}
@@ -87,7 +91,7 @@ const ColorPickerInput: React.FC<{
               onChange(color);
             }}
             className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl border-2 transition-transform cursor-pointer ${
-              value.toLowerCase() === color.toLowerCase()
+              safeValue.toLowerCase() === color.toLowerCase()
                 ? 'border-[#523e32] scale-110 shadow-md ring-2 ring-[#ffcad4]'
                 : 'border-white/60 hover:scale-105'
             }`}
@@ -104,7 +108,7 @@ const ColorPickerInput: React.FC<{
           <Palette size={14} className="text-white drop-shadow" />
           <input
             type="color"
-            value={value.startsWith('#') && value.length === 7 ? value : '#ffa94d'}
+            value={safeValue.length === 7 ? safeValue : '#ffa94d'}
             onChange={(e) => onChange(e.target.value)}
             className="sr-only"
           />
@@ -741,6 +745,37 @@ export const CatCustomizerModal: React.FC = () => {
                 soundManager.playMeow(1.3);
                 soundManager.playSparkle();
                 setCustomizerOpen(false);
+
+                // 1. Broadcast updated cat appearance & name tag over WebRTC in real-time
+                let currentPos = { x: 700, y: 480, direction: 'down' };
+                try {
+                  const saved = localStorage.getItem('wecats_player_pos');
+                  if (saved) currentPos = { ...currentPos, ...JSON.parse(saved) };
+                } catch {}
+
+                broadcastP2PPacket({
+                  type: 'cat-joined',
+                  customization: myCat,
+                  stats: useCatStore.getState().stats,
+                  x: currentPos.x,
+                  y: currentPos.y,
+                  direction: currentPos.direction,
+                  isGreeting: false,
+                });
+
+                broadcastP2PPacket({
+                  type: 'cat-move',
+                  customization: myCat,
+                  x: currentPos.x,
+                  y: currentPos.y,
+                  direction: currentPos.direction,
+                  isMoving: false,
+                  behavior: 'idle',
+                });
+
+                useCatStore.getState().setNotification(`แปลงโฉมและบันทึก "${myCat.name}" เรียบร้อย! 🌸✨`);
+
+                // 2. Persist to Cloud Database
                 try {
                   await fetch('/api/cat/save', {
                     method: 'POST',
@@ -749,7 +784,7 @@ export const CatCustomizerModal: React.FC = () => {
                   });
                 } catch {}
               }}
-              className="btn-jelly px-8 py-2.5 rounded-2xl bg-[#ffcad4] text-[#523e32] font-fredoka font-bold text-sm border-2 border-[#523e32] flex items-center gap-2 shadow-lg"
+              className="btn-jelly px-8 py-2.5 rounded-2xl bg-[#ffcad4] hover:bg-[#ffb5c5] text-[#523e32] font-fredoka font-bold text-sm border-2 border-[#523e32] flex items-center gap-2 shadow-lg cursor-pointer"
             >
               <Check size={18} />
               บันทึกและพาน้องแมวออกเดินเล่น!

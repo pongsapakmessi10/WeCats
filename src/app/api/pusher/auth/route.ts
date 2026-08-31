@@ -15,13 +15,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid socket_id or channel_name' }, { status: 400 });
     }
 
-    const userId = session?.userId || `guest_${Math.random().toString(36).substring(2, 9)}`;
+    const rawUserId = session?.userId || `guest_${Math.random().toString(36).substring(2, 9)}`;
     const username = session?.username || `Cat_${Math.floor(1000 + Math.random() * 9000)}`;
 
+    // Unique presence user_id per socket/tab so multi-tab testing on the same browser/machine
+    // is treated as distinct live players and stays connected even when switching tabs
+    const uniquePresenceId = `${rawUserId}_${socketId.replace(/[^a-zA-Z0-9]/g, '')}`;
+
     const presenceData = {
-      user_id: userId,
+      user_id: uniquePresenceId,
       user_info: {
-        id: userId,
+        id: uniquePresenceId,
+        userId: rawUserId,
         username,
         isGuest: !session,
       },

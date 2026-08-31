@@ -3,7 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { useCatStore } from '@/store/catStore';
 import { soundManager } from '@/audio/soundManager';
-import { Radio, Lock, Plus, Users, X, Sparkles, Key, Check } from 'lucide-react';
+import { Radio, Lock, Plus, Users, X, Key, Check, Trash2 } from 'lucide-react';
+import {
+  SakuraBlossomIcon,
+  SunshineSunIcon,
+  MoonlightCrescentIcon,
+} from '@/components/ui/GameIcons';
+import { broadcastP2PPacket } from '@/game/multiplayer/p2pManager';
 
 interface ServerChannelModalProps {
   isOpen: boolean;
@@ -22,12 +28,12 @@ interface RoomItem {
 export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState<'public' | 'private' | 'create'>('public');
   const [publicChannels, setPublicChannels] = useState<RoomItem[]>([
-    { id: 'public-sakura', name: 'Plaza #1: สวนซากุระ 🌸', type: 'public', theme: 'sakura', maxCapacity: 20, currentCount: 14 },
-    { id: 'public-sunshine', name: 'Plaza #2: ลานแดดอุ่น ☀️', type: 'public', theme: 'sunshine', maxCapacity: 20, currentCount: 8 },
-    { id: 'public-moonlight', name: 'Plaza #3: แสงจันทร์ Lofi 🌙', type: 'public', theme: 'moonlight', maxCapacity: 20, currentCount: 5 },
+    { id: 'public-sakura', name: 'Plaza #1: สวนซากุระ', type: 'public', theme: 'sakura', maxCapacity: 20, currentCount: 0 },
+    { id: 'public-sunshine', name: 'Plaza #2: ลานแดดอุ่น', type: 'public', theme: 'sunshine', maxCapacity: 20, currentCount: 0 },
+    { id: 'public-moonlight', name: 'Plaza #3: แสงจันทร์ Lofi', type: 'public', theme: 'moonlight', maxCapacity: 20, currentCount: 0 },
   ]);
   const [privateRooms, setPrivateRooms] = useState<RoomItem[]>([]);
-  const [currentRoomId, setCurrentRoomId] = useState('public-sakura');
+  const [isLoadingRooms, setIsLoadingRooms] = useState(true);
 
   // Create room state
   const [newRoomName, setNewRoomName] = useState('');
@@ -40,15 +46,20 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const currentRoom = useCatStore((state) => state.currentRoom);
   const setCurrentRoom = useCatStore((state) => state.setCurrentRoom);
+  const onlineCats = useCatStore((state) => state.onlineCats);
 
   const fetchRooms = () => {
+    setIsLoadingRooms(true);
     fetch('/api/rooms')
       .then((res) => res.json())
       .then((data) => {
         if (data.publicChannels) setPublicChannels(data.publicChannels);
         if (data.privateRooms) setPrivateRooms(data.privateRooms);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        setIsLoadingRooms(false);
+      });
   };
 
   useEffect(() => {
@@ -139,15 +150,50 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
     }
   };
 
+  const handleDeleteRoom = async (room: RoomItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`คุณต้องการลบห้อง "${room.name}" ใช่หรือไม่?\n(ผู้เล่นทุกคนในห้องจะถูกพากลับสู่สวนซากุระ Plaza)`)) return;
+
+    // 1. Broadcast WebRTC packet to instantly kick all peers in the room
+    broadcastP2PPacket({
+      type: 'room-deleted',
+      roomId: room.id,
+      roomName: room.name,
+    });
+
+    try {
+      // 2. Delete room from Cloud Database
+      await fetch('/api/rooms/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: room.id }),
+      });
+
+      fetchRooms();
+
+      // 3. If the host is currently in that room, kick self back to Sakura Plaza
+      if (currentRoom.id === room.id) {
+        useCatStore.getState().kickToSakuraPlaza(room.name);
+        onClose();
+      }
+    } catch {}
+  };
+
+  const getThemeIcon = (theme: string) => {
+    if (theme === 'moonlight') return <MoonlightCrescentIcon size={16} />;
+    if (theme === 'sunshine') return <SunshineSunIcon size={16} />;
+    return <SakuraBlossomIcon size={16} />;
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-md p-4 animate-in fade-in">
       <div className="relative w-full max-w-lg bg-[#fbf7f0] rounded-[36px] border-4 border-[#523e32] shadow-2xl p-6 flex flex-col gap-4">
         
         {/* Header */}
         <div className="flex items-center justify-between border-b-2 border-[#ebd9c8] pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-2xl bg-[#caeedf] border-2 border-[#523e32] flex items-center justify-center text-xl shadow-sm">
-              🌐
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-[#caeedf] border-2 border-[#523e32] flex items-center justify-center shadow-sm">
+              <Radio size={20} className="text-[#523e32]" />
             </div>
             <div>
               <h3 className="font-fredoka font-bold text-lg text-[#523e32]">Server & Channel Hub</h3>
@@ -159,7 +205,7 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
               soundManager.playPop();
               onClose();
             }}
-            className="p-1.5 rounded-full hover:bg-[#ebd9c8] text-[#523e32]"
+            className="p-1.5 rounded-full hover:bg-[#ebd9c8] text-[#523e32] cursor-pointer"
           >
             <X size={20} />
           </button>
@@ -187,11 +233,12 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
               setErrorMsg(null);
               fetchRooms();
             }}
-            className={`py-2 rounded-xl text-xs font-fredoka font-bold transition-all cursor-pointer ${
+            className={`py-2 rounded-xl text-xs font-fredoka font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
               activeTab === 'private' ? 'bg-white text-[#523e32] shadow-sm' : 'text-[#8d7568]'
             }`}
           >
-            Private Rooms 🔒
+            <Lock size={12} />
+            <span>Private Rooms</span>
           </button>
           <button
             onClick={() => {
@@ -210,50 +257,87 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
         {/* Error Alert */}
         {errorMsg && (
           <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-2 rounded-2xl text-xs font-itim">
-            ⚠️ {errorMsg}
+            {errorMsg}
           </div>
         )}
 
         {/* TAB 1: PUBLIC CHANNELS */}
         {activeTab === 'public' && (
           <div className="space-y-2.5 max-h-72 overflow-y-auto">
-            {publicChannels.map((ch) => {
-              const isCurrent = currentRoomId === ch.id;
-              return (
+            {isLoadingRooms ? (
+              [1, 2, 3].map((i) => (
                 <div
-                  key={ch.id}
-                  onClick={() => handleSelectPublic(ch)}
-                  className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${
-                    isCurrent
-                      ? 'bg-[#ffcad4] border-[#523e32] shadow-md scale-[1.01]'
-                      : 'bg-white border-[#ebd9c8] hover:border-[#ffcad4]'
-                  }`}
+                  key={i}
+                  className="p-3.5 rounded-2xl border-2 border-[#ebd9c8] bg-white flex items-center justify-between animate-pulse"
                 >
                   <div className="flex items-center gap-3">
-                    <Radio size={18} className={isCurrent ? 'text-[#523e32]' : 'text-[#8d7568]'} />
-                    <div>
-                      <h4 className="font-fredoka font-bold text-sm text-[#523e32]">{ch.name}</h4>
-                      <p className="font-itim text-xs text-[#8d7568]">
-                        จำกัด 20 แมว • บรรยากาศเป็นกันเอง
-                      </p>
+                    <div className="w-8 h-8 rounded-xl bg-[#ebd9c8]/70" />
+                    <div className="space-y-1.5">
+                      <div className="w-32 h-4 rounded-md bg-[#ebd9c8]/70" />
+                      <div className="w-24 h-3 rounded-md bg-[#ebd9c8]/40" />
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="badge-pill bg-white/80 text-xs font-fredoka text-[#523e32]">
-                      <Users size={12} /> {ch.currentCount}/{ch.maxCapacity}
-                    </span>
-                    {isCurrent && <Check size={16} className="text-emerald-700 font-bold" />}
-                  </div>
+                  <div className="w-14 h-6 rounded-full bg-[#ebd9c8]/60" />
                 </div>
-              );
-            })}
+              ))
+            ) : (
+              publicChannels.map((ch) => {
+                const isCurrent = currentRoom.id === ch.id;
+                const liveCount = isCurrent ? onlineCats.length + 1 : ch.currentCount;
+
+                return (
+                  <div
+                    key={ch.id}
+                    onClick={() => handleSelectPublic(ch)}
+                    className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${
+                      isCurrent
+                        ? 'bg-[#ffcad4] border-[#523e32] shadow-md scale-[1.01]'
+                        : 'bg-white border-[#ebd9c8] hover:border-[#ffcad4]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-white/80 border border-[#ebd9c8] flex items-center justify-center">
+                        {getThemeIcon(ch.theme)}
+                      </div>
+                      <div>
+                        <h4 className="font-fredoka font-bold text-sm text-[#523e32]">{ch.name}</h4>
+                        <p className="font-itim text-xs text-[#8d7568]">
+                          จำกัด {ch.maxCapacity} แมว • บรรยากาศเป็นกันเอง
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="badge-pill bg-white/80 text-xs font-fredoka text-[#523e32] flex items-center gap-1">
+                        <Users size={12} /> {liveCount}/{ch.maxCapacity}
+                      </span>
+                      {isCurrent && <Check size={16} className="text-emerald-700 font-bold" />}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
 
         {/* TAB 2: PRIVATE ROOMS */}
         {activeTab === 'private' && (
           <div className="space-y-3">
-            {privateRooms.length === 0 ? (
+            {isLoadingRooms ? (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {[1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="p-3 rounded-2xl border-2 border-[#ebd9c8] bg-white flex items-center justify-between animate-pulse"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-[#ebd9c8]/70" />
+                      <div className="w-28 h-3.5 rounded-md bg-[#ebd9c8]/70" />
+                    </div>
+                    <div className="w-12 h-5 rounded-full bg-[#ebd9c8]/60" />
+                  </div>
+                ))}
+              </div>
+            ) : privateRooms.length === 0 ? (
               <div className="bg-white p-6 rounded-2xl border-2 border-[#ebd9c8] text-center space-y-2">
                 <Lock className="mx-auto text-[#8d7568]" size={28} />
                 <h4 className="font-fredoka font-bold text-sm text-[#523e32]">ยังไม่มีห้องส่วนตัวที่เปิดอยู่</h4>
@@ -266,6 +350,8 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
                 {privateRooms.map((room) => {
                   const isCurrent = currentRoom.id === room.id;
                   const isSelected = selectedPrivateRoom?.id === room.id;
+                  const liveCount = isCurrent ? onlineCats.length + 1 : room.currentCount;
+
                   return (
                     <div
                       key={room.id}
@@ -282,14 +368,23 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <Lock size={16} className={isCurrent ? 'text-[#523e32]' : 'text-[#8d7568]'} />
+                        <div className="w-7 h-7 rounded-lg bg-white/80 border border-[#ebd9c8] flex items-center justify-center">
+                          {getThemeIcon(room.theme)}
+                        </div>
                         <span className="font-fredoka font-bold text-xs text-[#523e32]">{room.name}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="badge-pill bg-white text-[11px] font-fredoka">
-                          {room.currentCount}/{room.maxCapacity} แมว
+                        <span className="badge-pill bg-white text-[11px] font-fredoka flex items-center gap-1">
+                          <Users size={11} /> {liveCount}/{room.maxCapacity}
                         </span>
                         {isCurrent && <Check size={16} className="text-emerald-700 font-bold" />}
+                        <button
+                          onClick={(e) => handleDeleteRoom(room, e)}
+                          title="ลบห้องนี้"
+                          className="p-1 rounded-lg text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     </div>
                   );
@@ -358,9 +453,9 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
               <label className="font-itim text-xs text-[#523e32] font-bold">ธีมบรรยากาศห้อง (Theme)</label>
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { id: 'sakura', label: '🌸 สวนซากุระ' },
-                  { id: 'sunshine', label: '☀️ ลานแดดอุ่น' },
-                  { id: 'moonlight', label: '🌙 แสงจันทร์' },
+                  { id: 'sakura', label: 'สวนซากุระ', icon: <SakuraBlossomIcon size={16} /> },
+                  { id: 'sunshine', label: 'ลานแดดอุ่น', icon: <SunshineSunIcon size={16} /> },
+                  { id: 'moonlight', label: 'แสงจันทร์', icon: <MoonlightCrescentIcon size={16} /> },
                 ].map((th) => (
                   <button
                     type="button"
@@ -369,11 +464,12 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
                       soundManager.playPop();
                       setNewRoomTheme(th.id);
                     }}
-                    className={`btn-jelly py-2 rounded-xl text-xs font-fredoka font-bold border-2 border-[#523e32] ${
+                    className={`btn-jelly py-2 rounded-xl text-xs font-fredoka font-bold border-2 border-[#523e32] flex items-center justify-center gap-1.5 ${
                       newRoomTheme === th.id ? 'bg-[#caeedf]' : 'bg-white'
                     }`}
                   >
-                    {th.label}
+                    {th.icon}
+                    <span>{th.label}</span>
                   </button>
                 ))}
               </div>

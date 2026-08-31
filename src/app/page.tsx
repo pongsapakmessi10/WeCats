@@ -12,8 +12,11 @@ import { CatProfileModal } from '@/components/hud/CatProfileModal';
 import { CatShopModal } from '@/components/shop/CatShopModal';
 import { CatDiaryModal } from '@/components/diary/CatDiaryModal';
 import { FriendListModal } from '@/components/social/FriendListModal';
+import { DirectChatModal } from '@/components/social/DirectChatModal';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { ServerChannelModal } from '@/components/hud/ServerChannelModal';
+import { RoomDeletedModal } from '@/components/hud/RoomDeletedModal';
+import { FullscreenCatLoader } from '@/components/loading/FullscreenCatLoader';
 import { WelcomeTitleScreen } from '@/components/welcome/WelcomeTitleScreen';
 import { useCatStore } from '@/store/catStore';
 import { soundManager } from '@/audio/soundManager';
@@ -21,6 +24,7 @@ import { soundManager } from '@/audio/soundManager';
 export default function Home() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isChannelsOpen, setIsChannelsOpen] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isInGame, setIsInGame] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ username: string; isGuest: boolean } | null>(null);
 
@@ -28,15 +32,38 @@ export default function Home() {
   const myCat = useCatStore((state) => state.myCat);
   const stats = useCatStore((state) => state.stats);
   const updateCustomization = useCatStore((state) => state.updateCustomization);
+  const setCurrentRoom = useCatStore((state) => state.setCurrentRoom);
 
-  // Check existing session on mount
+  // Restore persistent room & in-game flag from localStorage on client mount
+  useEffect(() => {
+    try {
+      const savedInGame = localStorage.getItem('wecats_in_game');
+      if (savedInGame === 'true') {
+        setIsInGame(true);
+      }
+
+      const savedRoom = localStorage.getItem('wecats_current_room');
+      if (savedRoom) {
+        const parsed = JSON.parse(savedRoom);
+        if (parsed?.id && parsed?.name) {
+          setCurrentRoom(parsed);
+        }
+      }
+    } catch {}
+  }, [setCurrentRoom]);
+
+  // Check existing session on mount smoothly
   useEffect(() => {
     fetch('/api/auth/me')
       .then((res) => res.json())
       .then((data) => {
         if (data.user) {
           setCurrentUser(data.user);
-          setIsInGame(true); // Automatically enter game if already authenticated
+          setIsInGame(true);
+          try {
+            localStorage.setItem('wecats_in_game', 'true');
+          } catch {}
+
           if (data.catProfile) {
             updateCustomization({
               name: data.catProfile.name,
@@ -62,9 +89,17 @@ export default function Home() {
               personality: data.catProfile.personality,
             });
           }
+        } else {
+          setIsInGame(false);
+          try {
+            localStorage.removeItem('wecats_in_game');
+          } catch {}
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        setIsAuthLoading(false);
+      });
   }, [updateCustomization]);
 
   // Periodic Auto-Save Cat Data to Backend (every 15 seconds if logged in)
@@ -86,7 +121,10 @@ export default function Home() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
       setCurrentUser(null);
-      setIsInGame(false); // Return to grand Title Screen
+      setIsInGame(false);
+      try {
+        localStorage.removeItem('wecats_in_game');
+      } catch {}
       useCatStore.getState().setNotification('ออกจากระบบเรียบร้อยแล้ว 🐾');
     } catch {}
   };
@@ -101,35 +139,44 @@ export default function Home() {
       if (data.user) {
         setCurrentUser(data.user);
         setIsInGame(true);
-        useCatStore.getState().setNotification(`ยินดีต้อนรับ ${data.user.username} สู่ WeCats Plaza! 🌸`);
+        try {
+          localStorage.setItem('wecats_in_game', 'true');
+        } catch {}
+        soundManager.playSparkle();
+        useCatStore.getState().setNotification(`เข้าเล่นในฐานะ ${data.user.username} สำเร็จ! 🐾`);
       }
     } catch {
       setIsInGame(true);
+      try {
+        localStorage.setItem('wecats_in_game', 'true');
+      } catch {}
     }
   };
 
-  const handleFirstTimeOnboarding = () => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.user) setCurrentUser(data.user);
-      })
-      .catch(() => {});
-
+  const handleCreateAndAdopt = () => {
     setIsInGame(true);
+    try {
+      localStorage.setItem('wecats_in_game', 'true');
+    } catch {}
+    setCustomizerOpen(true);
+  };
+
+  const handleFirstTimeOnboarding = (user?: { username: string; isGuest: boolean }) => {
+    if (user) setCurrentUser(user);
+    setIsInGame(true);
+    try {
+      localStorage.setItem('wecats_in_game', 'true');
+    } catch {}
     setCustomizerOpen(true);
   };
 
   return (
-    <main className="fixed inset-0 w-screen h-screen overflow-hidden select-none bg-[#b7e4c7]">
+    <main className="relative w-screen h-screen overflow-hidden select-none bg-[#b7e4c7]">
       
-      {/* 1. GRAND WELCOME TITLE SCREEN (Shows if user hasn't entered game yet) */}
-      {!isInGame && (
+      {/* 1. GRAND TITLE SCREEN (WELCOME SCREEN) - Only shown when truly not in game and not loading auth */}
+      {!isInGame && !isAuthLoading && (
         <WelcomeTitleScreen
-          onEnterCustomizer={() => {
-            setIsInGame(true);
-            setCustomizerOpen(true);
-          }}
+          onEnterCustomizer={handleCreateAndAdopt}
           onQuickPlay={handleQuickPlayGuest}
           onOpenAuth={() => setIsAuthOpen(true)}
           onOpenChannels={() => setIsChannelsOpen(true)}
@@ -150,10 +197,11 @@ export default function Home() {
               onOpenChannels={() => setIsChannelsOpen(true)}
               currentUser={currentUser}
               onLogout={handleLogout}
+              isAuthLoading={isAuthLoading}
             />
           </div>
           <div className="w-full max-w-4xl flex justify-center">
-            <BiologyStatsBar />
+            <BiologyStatsBar isAuthLoading={isAuthLoading} />
           </div>
         </div>
       )}
@@ -190,6 +238,7 @@ export default function Home() {
       <CatShopModal />
       <CatDiaryModal />
       <FriendListModal />
+      <DirectChatModal />
 
       <AuthModal
         isOpen={isAuthOpen}
@@ -201,6 +250,9 @@ export default function Home() {
               if (data.user) {
                 setCurrentUser(data.user);
                 setIsInGame(true);
+                try {
+                  localStorage.setItem('wecats_in_game', 'true');
+                } catch {}
               }
             })
             .catch(() => {});
@@ -212,6 +264,11 @@ export default function Home() {
         isOpen={isChannelsOpen}
         onClose={() => setIsChannelsOpen(false)}
       />
+
+      <RoomDeletedModal />
+
+      {/* FULLSCREEN SPINNING CAT LOADER (Shown on page refresh until all fetch completes) */}
+      <FullscreenCatLoader isLoading={isAuthLoading} />
 
     </main>
   );

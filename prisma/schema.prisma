@@ -67,5 +67,17 @@ model Room {
   passcode    String?  // PIN code for private rooms
   theme       String   @default("sakura") // "sakura", "sunshine", "moonlight"
   maxCapacity Int      @default(20)
+  ownerId     String?
+  ownerName   String?
   createdAt   DateTime @default(now())
+}
+
+model ActivePeer {
+  id           String   @id // peerId
+  roomId       String   // e.g. "public-sakura" or private room id
+  userId       String?
+  username     String   @default("Player")
+  catJson      String   @default("{}")
+  lastSeen     DateTime @default(now())
+  createdAt    DateTime @default(now())
 }

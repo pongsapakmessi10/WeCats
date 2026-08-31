@@ -6,6 +6,51 @@ import { CatRenderer } from '@/game/renderer/CatRenderer';
 import { soundManager } from '@/audio/soundManager';
 import { InteractiveProp, OnlineCat } from '@/types/game';
 import { useMultiplayer } from '@/game/multiplayer/useMultiplayer';
+import {
+  CatPawIcon,
+  FoodBowlIcon,
+  WaterDropIcon,
+  ScratchPostIcon,
+  SunshineSunIcon,
+  AmacatBoxIcon,
+  PetHeartIcon,
+} from '@/components/ui/GameIcons';
+import { UserPlus } from 'lucide-react';
+
+// --- FIXED VIRTUAL WORLD CONSTANTS (Resolution-Independent) ---
+export const WORLD_WIDTH = 1400;
+export const WORLD_HEIGHT = 900;
+export const WORLD_CENTER_X = 700;
+export const WORLD_CENTER_Y = 450;
+
+// Standard Fixed Props positioned in World Coordinates
+const FIXED_PLAZA_PROPS: InteractiveProp[] = PLAZA_PROPS.map((p) => {
+  let px = WORLD_CENTER_X;
+  let py = WORLD_CENTER_Y;
+  if (p.id === 'prop-fountain') {
+    px = WORLD_CENTER_X;
+    py = WORLD_CENTER_Y + 30; // (700, 480)
+  } else if (p.id === 'prop-food') {
+    px = WORLD_CENTER_X - 260; // (440, 470)
+    py = WORLD_CENTER_Y + 20;
+  } else if (p.id === 'prop-scratch') {
+    px = WORLD_CENTER_X + 280; // (980, 530)
+    py = WORLD_CENTER_Y + 80;
+  } else if (p.id === 'prop-tree') {
+    px = WORLD_CENTER_X - 320; // (380, 310)
+    py = WORLD_CENTER_Y - 140;
+  } else if (p.id === 'prop-box') {
+    px = WORLD_CENTER_X - 120; // (580, 310)
+    py = WORLD_CENTER_Y - 140;
+  } else if (p.id === 'prop-sun') {
+    px = WORLD_CENTER_X + 180; // (880, 300)
+    py = WORLD_CENTER_Y - 150;
+  } else if (p.id === 'prop-laser') {
+    px = WORLD_CENTER_X - 50;  // (650, 650)
+    py = WORLD_CENTER_Y + 200;
+  }
+  return { ...p, x: px, y: py };
+});
 
 interface GameCanvasProps {
   onOpenCustomizer: () => void;
@@ -14,7 +59,7 @@ interface GameCanvasProps {
 export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const currentRoom = useCatStore((state) => state.currentRoom);
-  const { sendMyPosition } = useMultiplayer(`presence-${currentRoom.id}`);
+  const { sendMyPosition } = useMultiplayer(currentRoom.id);
 
   // Store bindings
   const myCat = useCatStore((state) => state.myCat);
@@ -29,18 +74,43 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
   const activeNearbyProp = useCatStore((state) => state.activeNearbyProp);
   const selectedNearbyCat = useCatStore((state) => state.selectedNearbyCat);
   const tickBiology = useCatStore((state) => state.tickBiology);
+  const myCatChat = useCatStore((state) => state.myCatChat);
+  const friends = useCatStore((state) => state.friends);
+  const sendFriendRequestToCat = useCatStore((state) => state.sendFriendRequestToCat);
+  const setActiveDirectChatFriend = useCatStore((state) => state.setActiveDirectChatFriend);
 
   // Canvas Dimensions (responsive to window size)
   const [dimensions, setDimensions] = useState({ width: 1400, height: 900 });
 
-  // Local Player State
-  const playerPosRef = useRef({ x: 700, y: 480, vx: 0, vy: 0, dir: 'down' as 'up' | 'down' | 'left' | 'right' });
+  // Local Player State (Restores from localStorage in World Coordinates)
+  const playerPosRef = useRef<{ x: number; y: number; vx: number; vy: number; dir: 'up' | 'down' | 'left' | 'right' }>({
+    x: 700,
+    y: 480,
+    vx: 0,
+    vy: 0,
+    dir: 'down',
+  });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('wecats_player_pos');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+          playerPosRef.current.x = Math.max(50, Math.min(WORLD_WIDTH - 50, parsed.x));
+          playerPosRef.current.y = Math.max(80, Math.min(WORLD_HEIGHT - 80, parsed.y));
+          playerPosRef.current.dir = parsed.dir || 'down';
+        }
+      }
+    } catch {}
+  }, []);
+
   const keysRef = useRef<{ [key: string]: boolean }>({});
 
   // Laser pointer position for zoomie event
-  const laserRef = useRef({ x: 600, y: 560, targetX: 600, targetY: 560, active: false });
+  const laserRef = useRef({ x: 650, y: 650, targetX: 650, targetY: 650, active: false });
 
-  // Floating blossom particles
+  // Floating blossom particles in World Space
   const particlesRef = useRef<Array<{ x: number; y: number; vx: number; vy: number; rot: number; size: number; alpha: number }>>([]);
 
   // Resize listener for true edge-to-edge fullscreen
@@ -57,21 +127,42 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Biology Tick (every 3 seconds)
+  // Biology Tick (every 3 seconds) & Position Saver
   useEffect(() => {
+    const savePos = () => {
+      try {
+        localStorage.setItem(
+          'wecats_player_pos',
+          JSON.stringify({
+            x: Math.round(playerPosRef.current.x),
+            y: Math.round(playerPosRef.current.y),
+            dir: playerPosRef.current.dir,
+          })
+        );
+      } catch {}
+    };
+
     const timer = setInterval(() => {
       tickBiology();
+      savePos();
     }, 3000);
-    return () => clearInterval(timer);
+
+    window.addEventListener('beforeunload', savePos);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('beforeunload', savePos);
+      savePos();
+    };
   }, [tickBiology]);
 
-  // Init particles
+  // Init particles in World Coordinates
   useEffect(() => {
     const particles = [];
     for (let i = 0; i < 35; i++) {
       particles.push({
-        x: Math.random() * (dimensions.width || 1200),
-        y: Math.random() * (dimensions.height || 800),
+        x: Math.random() * WORLD_WIDTH,
+        y: Math.random() * WORLD_HEIGHT,
         vx: 0.3 + Math.random() * 0.7,
         vy: 0.5 + Math.random() * 0.8,
         rot: Math.random() * Math.PI * 2,
@@ -80,17 +171,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       });
     }
     particlesRef.current = particles;
-  }, [dimensions.width, dimensions.height]);
+  }, []);
 
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (document.activeElement?.tagName === 'INPUT') return;
+      if (document.activeElement?.tagName === 'INPUT' || !e.key) return;
 
-      keysRef.current[e.key.toLowerCase()] = true;
+      const key = e.key.toLowerCase();
+      keysRef.current[key] = true;
 
       // Quick interact with [E] or Space
-      if (e.key.toLowerCase() === 'e' || e.code === 'Space') {
+      if (key === 'e' || e.code === 'Space') {
         const prop = useCatStore.getState().activeNearbyProp;
         const cat = useCatStore.getState().selectedNearbyCat;
 
@@ -105,6 +197,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (!e.key) return;
       keysRef.current[e.key.toLowerCase()] = false;
     };
 
@@ -133,11 +226,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       const cw = canvas.width;
       const ch = canvas.height;
 
-      // Dynamic center coordinates for scalable world
-      const centerX = cw / 2;
-      const centerY = ch / 2;
+      // Calculate Uniform Scaling Matrix to fit/center the fixed virtual world on any screen
+      const scale = Math.min(cw / WORLD_WIDTH, ch / WORLD_HEIGHT);
+      const offsetX = (cw - WORLD_WIDTH * scale) / 2;
+      const offsetY = (ch - WORLD_HEIGHT * scale) / 2;
 
-      // 1. Process Player Movement
+      // 1. Process Player Movement (in World Coordinates)
       const keys = keysRef.current;
       let dx = 0;
       let dy = 0;
@@ -165,9 +259,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       playerPosRef.current.x += playerPosRef.current.vx * dt;
       playerPosRef.current.y += playerPosRef.current.vy * dt;
 
-      // Dynamic Boundary clamp (fullscreen)
-      playerPosRef.current.x = Math.max(40, Math.min(cw - 40, playerPosRef.current.x));
-      playerPosRef.current.y = Math.max(80, Math.min(ch - 80, playerPosRef.current.y));
+      // Fixed World Boundary clamp (50 to 1350, 80 to 820)
+      playerPosRef.current.x = Math.max(50, Math.min(WORLD_WIDTH - 50, playerPosRef.current.x));
+      playerPosRef.current.y = Math.max(80, Math.min(WORLD_HEIGHT - 80, playerPosRef.current.y));
 
       if (Math.abs(playerPosRef.current.vx) > 5) {
         playerPosRef.current.dir = playerPosRef.current.vx > 0 ? 'right' : 'left';
@@ -179,7 +273,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
 
       const isMoving = Math.abs(playerPosRef.current.vx) > 8 || Math.abs(playerPosRef.current.vy) > 8;
 
-      // Broadcast real-time position to other players
+      // Broadcast real-time position in universal World Coordinates to other players
       sendMyPosition(
         Math.round(playerPosRef.current.x),
         Math.round(playerPosRef.current.y),
@@ -188,39 +282,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
         stats.isZooming ? 'zoomies' : isMoving ? 'walking' : 'idle'
       );
 
-      // Compute dynamic responsive positions for plaza props
-      const dynamicProps = PLAZA_PROPS.map((p) => {
-        let px = centerX;
-        let py = centerY;
-        if (p.id === 'prop-fountain') {
-          px = centerX;
-          py = centerY + 30;
-        } else if (p.id === 'prop-food') {
-          px = centerX - 260;
-          py = centerY + 20;
-        } else if (p.id === 'prop-scratch') {
-          px = centerX + 280;
-          py = centerY + 80;
-        } else if (p.id === 'prop-tree') {
-          px = centerX - 320;
-          py = centerY - 140;
-        } else if (p.id === 'prop-box') {
-          px = centerX - 120;
-          py = centerY - 140;
-        } else if (p.id === 'prop-sun') {
-          px = centerX + 180;
-          py = centerY - 150;
-        } else if (p.id === 'prop-laser') {
-          px = centerX - 50;
-          py = centerY + 200;
-        }
-        return { ...p, x: px, y: py };
-      });
-
-      // 2. Check Proximity to Interactive Props
+      // 2. Check Proximity to Interactive Props (in World Space)
       let nearestProp: InteractiveProp | null = null;
-      let minPropDist = 80;
-      dynamicProps.forEach((prop) => {
+      let minPropDist = 85;
+      FIXED_PLAZA_PROPS.forEach((prop) => {
         const dist = Math.hypot(playerPosRef.current.x - prop.x, playerPosRef.current.y - prop.y);
         if (dist < minPropDist) {
           nearestProp = prop;
@@ -229,7 +294,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       });
       setActiveNearbyProp(nearestProp);
 
-      // 3. Check Proximity to Other Online Cats
+      // 3. Check Proximity to Other Online Cats (in World Space)
       let nearestCat: OnlineCat | null = null;
       let minCatDist = 90;
       onlineCats.forEach((cat) => {
@@ -241,12 +306,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       });
       setSelectedNearbyCat(nearestCat);
 
-      // 4. Update Laser Pointer Logic
+      // 4. Update Laser Pointer Logic (in World Space)
       if (stats.isZooming) {
         laserRef.current.active = true;
         if (Math.hypot(laserRef.current.x - laserRef.current.targetX, laserRef.current.y - laserRef.current.targetY) < 20) {
-          laserRef.current.targetX = centerX + (Math.random() - 0.5) * 600;
-          laserRef.current.targetY = centerY + (Math.random() - 0.5) * 400;
+          laserRef.current.targetX = WORLD_CENTER_X + (Math.random() - 0.5) * 600;
+          laserRef.current.targetY = WORLD_CENTER_Y + (Math.random() - 0.5) * 400;
         }
         laserRef.current.x += (laserRef.current.targetX - laserRef.current.x) * 0.08;
         laserRef.current.y += (laserRef.current.targetY - laserRef.current.y) * 0.08;
@@ -257,15 +322,23 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       // --- 5. RENDER SCENE ---
       ctx.clearRect(0, 0, cw, ch);
 
-      // 5.1 Fullscreen Stardew-Style Grass & Cobblestone Plaza (Themed)
-      renderEnvironmentGround(ctx, cw, ch, centerX, centerY, currentTime, currentRoom.theme);
+      // 5.1 Render Fullscreen Background Grass (Seamless edge-to-edge on entire screen)
+      renderBackgroundGrass(ctx, cw, ch, currentRoom.theme);
 
-      // 5.2 Interactive Props & Furniture
-      dynamicProps.forEach((prop) => {
+      // 5.2 Apply Virtual World Matrix Transform (Anchors everything to fixed 1400x900 world)
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(scale, scale);
+
+      // 5.3 Cobblestone Plaza & Flower Patches
+      renderPlazaCobblestone(ctx, currentRoom.theme);
+
+      // 5.4 Interactive Props & Furniture (Fixed World Coordinates)
+      FIXED_PLAZA_PROPS.forEach((prop) => {
         renderProp(ctx, prop, currentTime);
       });
 
-      // 5.3 Laser Pointer Dot (if active)
+      // 5.5 Laser Pointer Dot (if active)
       if (laserRef.current.active) {
         ctx.save();
         ctx.beginPath();
@@ -277,7 +350,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
         ctx.restore();
       }
 
-      // 5.4 Y-SORTED ENTITIES (Depth Sorting)
+      // 5.6 Y-SORTED ENTITIES (Depth Sorting in World Space)
       const entities: Array<{
         type: 'player' | 'online_cat';
         y: number;
@@ -323,7 +396,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
             timeMs: currentTime,
             isMoving: entity.isMoving,
             showNameTag: true,
-            emote: stats.isZooming ? '⚡' : null,
+            emote: stats.isZooming ? '⚡' : myCatChat.emote,
+            chatMessage: myCatChat.text,
           });
         } else {
           const oc = entity.catData as OnlineCat;
@@ -345,16 +419,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
         }
       });
 
-      // 5.5 Trees & Foreground Foliage (Themed)
-      renderTreesAndFoliage(ctx, cw, ch, currentRoom.theme);
+      // 5.7 Trees & Foreground Foliage (Themed in World Space)
+      renderTreesAndFoliage(ctx, currentRoom.theme);
 
-      // 5.6 Falling Floating Particles (Themed)
+      // 5.8 Falling Floating Particles (Themed in World Space)
       particlesRef.current.forEach((p) => {
         p.x += p.vx;
         p.y += p.vy;
         p.rot += 0.02;
-        if (p.y > ch + 20) p.y = -10;
-        if (p.x > cw + 20) p.x = -10;
+        if (p.y > WORLD_HEIGHT + 20) p.y = -10;
+        if (p.x > WORLD_WIDTH + 20) p.x = -10;
 
         ctx.save();
         ctx.translate(p.x, p.y);
@@ -378,8 +452,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
         ctx.restore();
       });
 
-      // 5.7 Fullscreen Ambient Lighting Filter
-      renderDayNightLighting(ctx, cw, ch, centerX, centerY, timeOfDay, currentRoom.theme);
+      // 5.9 Fullscreen Ambient Lighting Filter (Themed in World Space)
+      renderDayNightLighting(ctx, timeOfDay, currentRoom.theme);
+
+      ctx.restore(); // End World Matrix Transform
 
       animationFrameId = requestAnimationFrame(renderLoop);
     };
@@ -388,15 +464,35 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
     return () => cancelAnimationFrame(animationFrameId);
   }, [myCat, stats, onlineCats, timeOfDay, currentRoom, interactWithProp, sniffCat, setActiveNearbyProp, setSelectedNearbyCat, sendMyPosition]);
 
-  // Click on canvas to move or select
+  // Click on canvas to select cat (Converts Screen Click -> World Space Coordinates)
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const clickX = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const clickY = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-    const clickedCat = onlineCats.find((cat) => Math.hypot(clickX - cat.x, clickY - cat.y) < 45);
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const scale = Math.min(cw / WORLD_WIDTH, ch / WORLD_HEIGHT);
+    const offsetX = (cw - WORLD_WIDTH * scale) / 2;
+    const offsetY = (ch - WORLD_HEIGHT * scale) / 2;
+
+    const screenX = (e.clientX - rect.left) * (cw / rect.width);
+    const screenY = (e.clientY - rect.top) * (ch / rect.height);
+
+    const worldX = (screenX - offsetX) / scale;
+    const worldY = (screenY - offsetY) / scale;
+
+    // 1. Check click on player's OWN cat
+    const distToMe = Math.hypot(worldX - playerPosRef.current.x, worldY - playerPosRef.current.y);
+    if (distToMe < 50) {
+      soundManager.playMeow(1.2);
+      soundManager.playSparkle();
+      useCatStore.getState().setCustomizerOpen(true);
+      return;
+    }
+
+    // 2. Check click on other online cats
+    const clickedCat = onlineCats.find((cat) => Math.hypot(worldX - cat.x, worldY - cat.y) < 45);
 
     if (clickedCat) {
       soundManager.playMeow(1.1);
@@ -422,7 +518,19 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       {/* Proximity Interaction Floating Prompt */}
       {activeNearbyProp && (
         <div className="absolute bottom-28 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md px-6 py-3.5 rounded-full border-3 border-[#523e32] shadow-2xl flex items-center gap-3 animate-bounce z-20">
-          <span className="text-3xl">{activeNearbyProp.icon}</span>
+          <div className="w-10 h-10 rounded-2xl bg-[#fffbf0] border-2 border-[#523e32] flex items-center justify-center shadow-inner shrink-0">
+            {activeNearbyProp.type === 'water_fountain' ? (
+              <WaterDropIcon size={24} />
+            ) : activeNearbyProp.type === 'food_bowl' ? (
+              <FoodBowlIcon size={24} />
+            ) : activeNearbyProp.type === 'scratch_post' ? (
+              <ScratchPostIcon size={24} />
+            ) : activeNearbyProp.type === 'sun_patch' ? (
+              <SunshineSunIcon size={24} />
+            ) : (
+              <AmacatBoxIcon size={24} />
+            )}
+          </div>
           <div>
             <div className="font-fredoka font-bold text-[#523e32] text-sm">{activeNearbyProp.name}</div>
             <div className="font-itim text-xs text-[#8d7568]">{activeNearbyProp.prompt}</div>
@@ -442,31 +550,60 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       {/* Cat-to-Cat Interaction Prompt */}
       {selectedNearbyCat && !activeNearbyProp && (
         <div className="absolute bottom-28 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md px-6 py-3.5 rounded-full border-3 border-[#523e32] shadow-2xl flex items-center gap-4 animate-bounce z-20">
-          <span className="text-3xl">🐾</span>
+          <div className="w-10 h-10 rounded-2xl bg-[#caeedf] border-2 border-[#523e32] flex items-center justify-center shadow-inner shrink-0">
+            <CatPawIcon size={24} color="#523e32" />
+          </div>
           <div>
             <div className="font-fredoka font-bold text-[#523e32] text-sm">
               อยู่ใกล้ {selectedNearbyCat.customization.name}
             </div>
-            <div className="font-itim text-xs text-[#8d7568]">เลือกทักทายหรือเลียขนสานสัมพันธ์</div>
+            <div className="font-itim text-xs text-[#8d7568]">ขอเป็นเพื่อน หรือทักทายสานสัมพันธ์</div>
           </div>
           <div className="flex gap-2">
+            {friends.some((f) => f.id === selectedNearbyCat.id || f.catName === selectedNearbyCat.customization.name) ? (
+              <button
+                onClick={() => {
+                  soundManager.playPop();
+                  const friend = friends.find((f) => f.id === selectedNearbyCat.id || f.catName === selectedNearbyCat.customization.name);
+                  if (friend) setActiveDirectChatFriend(friend);
+                }}
+                className="btn-jelly bg-[#bde0fe] hover:bg-[#a8d4fc] text-[#523e32] px-3.5 py-1.5 rounded-full text-xs font-bold font-fredoka border-2 border-[#523e32] cursor-pointer flex items-center gap-1 shadow-sm"
+                title="เปิดแชทส่วนตัว 1-to-1"
+              >
+                <span>💬 แชทส่วนตัว</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  soundManager.playSparkle();
+                  sendFriendRequestToCat(selectedNearbyCat);
+                }}
+                className="btn-jelly bg-[#bde0fe] hover:bg-[#a8d4fc] text-[#523e32] px-3.5 py-1.5 rounded-full text-xs font-bold font-fredoka border-2 border-[#523e32] cursor-pointer flex items-center gap-1 shadow-sm"
+              >
+                <UserPlus size={13} />
+                <span>ขอเป็นเพื่อน</span>
+              </button>
+            )}
+
             <button
               onClick={() => {
                 soundManager.playMeow(1.2);
                 sniffCat(selectedNearbyCat.id);
               }}
-              className="btn-jelly bg-[#ffe494] text-[#523e32] px-4 py-1.5 rounded-full text-xs font-bold font-fredoka border-2 border-[#523e32] cursor-pointer"
+              className="btn-jelly bg-[#ffe494] text-[#523e32] px-3.5 py-1.5 rounded-full text-xs font-bold font-fredoka border-2 border-[#523e32] cursor-pointer flex items-center gap-1"
             >
-              ดมก้นทักทาย 👃
+              <CatPawIcon size={14} color="#523e32" />
+              <span>ดมก้นทักทาย</span>
             </button>
             <button
               onClick={() => {
                 soundManager.playPurr();
                 allogroomCat(selectedNearbyCat.id);
               }}
-              className="btn-jelly bg-[#ffcad4] text-[#523e32] px-4 py-1.5 rounded-full text-xs font-bold font-fredoka border-2 border-[#523e32] cursor-pointer"
+              className="btn-jelly bg-[#ffcad4] text-[#523e32] px-3.5 py-1.5 rounded-full text-xs font-bold font-fredoka border-2 border-[#523e32] cursor-pointer flex items-center gap-1"
             >
-              ช่วยเลียขน 💖
+              <PetHeartIcon size={14} />
+              <span>ช่วยเลียขน</span>
             </button>
           </div>
         </div>
@@ -485,16 +622,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
 
 // --- ENVIRONMENT RENDER HELPERS ---
 
-function renderEnvironmentGround(
+function renderBackgroundGrass(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
-  centerX: number,
-  centerY: number,
-  t: number,
   theme: 'sakura' | 'sunshine' | 'moonlight' = 'sakura'
 ) {
-  // 1. Theme-Specific Grass Colors
+  // Theme-Specific Grass Colors for full screen
   if (theme === 'moonlight') {
     ctx.fillStyle = '#1b263b';
   } else if (theme === 'sunshine') {
@@ -504,23 +638,28 @@ function renderEnvironmentGround(
   }
   ctx.fillRect(0, 0, w, h);
 
-  // Grass pattern dots
+  // Seamless Grass pattern dots across screen
   ctx.fillStyle = theme === 'moonlight' ? '#273854' : theme === 'sunshine' ? '#8cb343' : '#95d5b2';
-  for (let x = 30; x < w; x += 50) {
-    for (let y = 30; y < h; y += 50) {
+  for (let x = 25; x < w; x += 50) {
+    for (let y = 25; y < h; y += 50) {
       ctx.beginPath();
       ctx.arc(x + ((y % 100 === 0) ? 25 : 0), y, 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
+}
 
-  // 2. Central Cobblestone Plaza Circle
+function renderPlazaCobblestone(
+  ctx: CanvasRenderingContext2D,
+  theme: 'sakura' | 'sunshine' | 'moonlight' = 'sakura'
+) {
+  // Central Cobblestone Plaza Circle in World Space
   ctx.save();
-  const plazaRadiusX = Math.min(w * 0.38, 420);
-  const plazaRadiusY = Math.min(h * 0.32, 240);
+  const plazaRadiusX = 420;
+  const plazaRadiusY = 240;
 
   ctx.beginPath();
-  ctx.ellipse(centerX, centerY + 30, plazaRadiusX, plazaRadiusY, 0, 0, Math.PI * 2);
+  ctx.ellipse(WORLD_CENTER_X, WORLD_CENTER_Y + 30, plazaRadiusX, plazaRadiusY, 0, 0, Math.PI * 2);
 
   if (theme === 'moonlight') {
     ctx.fillStyle = '#2c3e5a';
@@ -540,22 +679,22 @@ function renderEnvironmentGround(
   // Cobblestone stones pattern
   ctx.fillStyle = theme === 'moonlight' ? '#3d5272' : theme === 'sunshine' ? '#ffd166' : '#e9d8a6';
   for (let angle = 0; angle < Math.PI * 2; angle += 0.25) {
-    const rx = centerX + Math.cos(angle) * (plazaRadiusX * 0.7);
-    const ry = (centerY + 30) + Math.sin(angle) * (plazaRadiusY * 0.7);
+    const rx = WORLD_CENTER_X + Math.cos(angle) * (plazaRadiusX * 0.7);
+    const ry = (WORLD_CENTER_Y + 30) + Math.sin(angle) * (plazaRadiusY * 0.7);
     ctx.beginPath();
     ctx.roundRect(rx - 12, ry - 8, 24, 16, 5);
     ctx.fill();
   }
   ctx.restore();
 
-  // 3. Flower Patches distributed across screen
+  // Flower Patches in World Space
   const flowers = [
-    { x: centerX - 380, y: centerY - 180 },
-    { x: centerX - 420, y: centerY + 120 },
-    { x: centerX + 380, y: centerY - 150 },
-    { x: centerX + 410, y: centerY + 160 },
-    { x: centerX - 120, y: centerY + 220 },
-    { x: centerX + 180, y: centerY + 210 },
+    { x: WORLD_CENTER_X - 380, y: WORLD_CENTER_Y - 180 },
+    { x: WORLD_CENTER_X - 420, y: WORLD_CENTER_Y + 120 },
+    { x: WORLD_CENTER_X + 380, y: WORLD_CENTER_Y - 150 },
+    { x: WORLD_CENTER_X + 410, y: WORLD_CENTER_Y + 160 },
+    { x: WORLD_CENTER_X - 120, y: WORLD_CENTER_Y + 220 },
+    { x: WORLD_CENTER_X + 180, y: WORLD_CENTER_Y + 210 },
   ];
   const flowerEmoji = theme === 'moonlight' ? '🪻' : theme === 'sunshine' ? '🌻' : '🌸';
   flowers.forEach((fl) => {
@@ -684,15 +823,13 @@ function renderProp(ctx: CanvasRenderingContext2D, prop: InteractiveProp, t: num
 
 function renderTreesAndFoliage(
   ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
   theme: 'sakura' | 'sunshine' | 'moonlight' = 'sakura'
 ) {
   const trees = [
     { x: 90, y: 110 },
-    { x: w - 90, y: 110 },
-    { x: 90, y: h - 110 },
-    { x: w - 90, y: h - 110 },
+    { x: WORLD_WIDTH - 90, y: 110 },
+    { x: 90, y: WORLD_HEIGHT - 110 },
+    { x: WORLD_WIDTH - 90, y: WORLD_HEIGHT - 110 },
   ];
 
   trees.forEach((tr) => {
@@ -738,10 +875,6 @@ function renderTreesAndFoliage(
 
 function renderDayNightLighting(
   ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  centerX: number,
-  centerY: number,
   timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night',
   theme: 'sakura' | 'sunshine' | 'moonlight' = 'sakura'
 ) {
@@ -749,13 +882,13 @@ function renderDayNightLighting(
 
   if (theme === 'moonlight' || timeOfDay === 'night') {
     ctx.fillStyle = 'rgba(15, 20, 42, 0.55)';
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-    // Warm glowing lanterns in the dark
+    // Warm glowing lanterns in the dark in World Space
     const lights = [
-      { x: centerX, y: centerY + 30, r: 240 },
-      { x: centerX - 320, y: centerY - 140, r: 140 },
-      { x: centerX + 280, y: centerY + 80, r: 140 },
+      { x: WORLD_CENTER_X, y: WORLD_CENTER_Y + 30, r: 240 },
+      { x: WORLD_CENTER_X - 320, y: WORLD_CENTER_Y - 140, r: 140 },
+      { x: WORLD_CENTER_X + 280, y: WORLD_CENTER_Y + 80, r: 140 },
     ];
     lights.forEach((lt) => {
       const grad = ctx.createRadialGradient(lt.x, lt.y, 10, lt.x, lt.y, lt.r);
@@ -768,13 +901,13 @@ function renderDayNightLighting(
     });
   } else if (theme === 'sunshine' || timeOfDay === 'afternoon') {
     ctx.fillStyle = 'rgba(255, 240, 180, 0.15)';
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
   } else if (timeOfDay === 'evening') {
     ctx.fillStyle = 'rgba(235, 94, 85, 0.2)';
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
   } else {
     ctx.fillStyle = 'rgba(255, 183, 140, 0.1)';
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
   }
 
   ctx.restore();

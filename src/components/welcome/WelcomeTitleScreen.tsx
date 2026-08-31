@@ -3,8 +3,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { soundManager } from '@/audio/soundManager';
 import confetti from 'canvas-confetti';
-import { Sparkles, Palette, Zap, LogIn, Radio, Heart, Award, Shield } from 'lucide-react';
-import { useCatStore } from '@/store/catStore';
+import { Sparkles, Palette, LogIn, Radio } from 'lucide-react';
+import {
+  CatPawIcon,
+  AmacatBoxIcon,
+  SakuraBlossomIcon,
+  LaserZapIcon,
+} from '@/components/ui/GameIcons';
 
 interface WelcomeTitleScreenProps {
   onEnterCustomizer: () => void;
@@ -100,7 +105,7 @@ export const WelcomeTitleScreen: React.FC<WelcomeTitleScreenProps> = ({
       {/* TOP BAR: Room Indicator & Version */}
       <div className="w-full max-w-6xl flex items-center justify-between z-10">
         <div className="flex items-center gap-2 bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full border-2 border-[#ebd9c8] shadow-md">
-          <span className="text-sm">🌸</span>
+          <SakuraBlossomIcon size={16} />
           <span className="font-fredoka font-bold text-xs text-[#523e32]">Public Server: Sakura Plaza</span>
           <span className="badge-pill bg-emerald-100 text-emerald-800 text-[10px] py-0.5">Online ●</span>
         </div>
@@ -125,14 +130,15 @@ export const WelcomeTitleScreen: React.FC<WelcomeTitleScreenProps> = ({
         {/* Grand Title Logo */}
         <div className="space-y-2 flex flex-col items-center">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#ffcad4] border-2 border-[#523e32] shadow-sm text-xs sm:text-sm font-fredoka font-bold text-[#523e32] animate-bounce">
-            <Sparkles size={15} /> 2D Cozy Feline Simulation & Online Plaza ✨
+            <Sparkles size={15} />
+            <span>2D Cozy Feline Simulation & Online Plaza</span>
           </div>
           <h1 className="font-fredoka font-extrabold text-5xl sm:text-7xl text-[#523e32] tracking-tight drop-shadow-md flex items-center gap-3 justify-center">
-            <span>🐾</span>
+            <CatPawIcon size={52} color="#523E32" />
             <span className="bg-gradient-to-r from-[#523e32] via-[#e76f51] to-[#523e32] bg-clip-text text-transparent">
               WeCats
             </span>
-            <span>🐾</span>
+            <CatPawIcon size={52} color="#523E32" />
           </h1>
           <p className="font-itim text-sm sm:text-lg text-[#8d7568] max-w-md">
             เกมเลี้ยงแมวสุดอบอุ่น ปรับแต่งแมวได้ตามใจ สถิติสมจริง และเดินเล่นกับเพื่อนๆ ในโลกออนไลน์
@@ -147,11 +153,12 @@ export const WelcomeTitleScreen: React.FC<WelcomeTitleScreenProps> = ({
           }`}
           title="กล่องรับเลี้ยงน้องแมวพิเศษแห่ง Plaza"
         >
-          <div className="text-7xl sm:text-9xl drop-shadow-lg">
-            📦
+          <div className="flex justify-center py-2">
+            <AmacatBoxIcon size={96} />
           </div>
-          <div className="mt-3 bg-[#fbf7f0] px-4 py-1.5 rounded-full border border-[#ebd9c8] text-xs font-itim text-[#523e32]">
-            กล่องรับเลี้ยงน้องแมวพิเศษแห่ง Plaza 💖
+          <div className="mt-3 bg-[#fbf7f0] px-4 py-1.5 rounded-full border border-[#ebd9c8] text-xs font-itim text-[#523e32] flex items-center gap-1.5 justify-center">
+            <CatPawIcon size={14} color="#523e32" />
+            <span>กล่องรับเลี้ยงน้องแมวพิเศษแห่ง Plaza</span>
           </div>
         </div>
 
@@ -164,7 +171,7 @@ export const WelcomeTitleScreen: React.FC<WelcomeTitleScreenProps> = ({
             className="btn-jelly w-full py-4 px-6 rounded-2xl bg-[#ffcad4] hover:bg-[#ffb5c5] text-[#523e32] font-fredoka font-bold text-base sm:text-lg border-3 border-[#523e32] flex items-center justify-center gap-3 shadow-xl transform active:scale-95 transition-all"
           >
             <Palette size={22} />
-            <span>🎀 ออกแบบและแต่งตัวแมวของฉัน (เริ่มเล่น)</span>
+            <span>ออกแบบและแต่งตัวแมวของฉัน (เริ่มเล่น)</span>
           </button>
 
           {/* Button 2: Quick Play as Guest */}
@@ -175,8 +182,8 @@ export const WelcomeTitleScreen: React.FC<WelcomeTitleScreenProps> = ({
             }}
             className="btn-jelly w-full py-3.5 px-5 rounded-2xl bg-[#ffe5a3] hover:bg-[#ffd166] text-[#523e32] font-fredoka font-bold text-sm sm:text-base border-2 border-[#523e32] flex items-center justify-center gap-2 shadow-md"
           >
-            <Zap size={18} />
-            <span>⚡ เริ่มเล่นทันทีด้วยแมวสุ่ม (Quick Play / Guest)</span>
+            <LaserZapIcon size={18} />
+            <span>เริ่มเล่นทันทีด้วยแมวสุ่ม (Quick Play / Guest)</span>
           </button>
 
           {/* Button 3: Login Existing Account */}
@@ -188,7 +195,7 @@ export const WelcomeTitleScreen: React.FC<WelcomeTitleScreenProps> = ({
             className="btn-jelly w-full py-3 px-5 rounded-2xl bg-white hover:bg-[#f5ebe0] text-[#523e32] font-fredoka font-bold text-xs sm:text-sm border-2 border-[#523e32] flex items-center justify-center gap-2 shadow-sm"
           >
             <LogIn size={16} />
-            <span>🔑 เข้าสู่ระบบด้วยบัญชีเดิม (Login)</span>
+            <span>เข้าสู่ระบบด้วยบัญชีเดิม (Login)</span>
           </button>
         </div>
 
@@ -197,12 +204,12 @@ export const WelcomeTitleScreen: React.FC<WelcomeTitleScreenProps> = ({
       {/* FOOTER BAR: Badges & Credits */}
       <div className="w-full max-w-4xl flex items-center justify-between text-xs font-itim text-[#8d7568] z-10 pt-4 border-t border-[#ebd9c8]/60">
         <div className="flex items-center gap-3">
-          <span>🌿 Stardew & Animal Crossing Inspired</span>
+          <span>Stardew & Animal Crossing Inspired</span>
           <span>•</span>
-          <span>🐾 2D Skeletal & Dynamic Physics</span>
+          <span>2D Skeletal & Dynamic Physics</span>
         </div>
         <div>
-          <span>© 2026 WeCats MMO • Made with Cozy Love 💖</span>
+          <span>© 2026 WeCats MMO • Made with Cozy Love</span>
         </div>
       </div>
 
