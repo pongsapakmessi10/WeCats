@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id           String       @id @default(cuid())
+  username     String       @unique
+  passwordHash String?
+  isGuest      Boolean      @default(false)
+  fishCoins    Int          @default(150)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  catProfiles  CatProfile[]
+}
+
+model CatProfile {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slotIndex      Int      @default(0) // 0 = main cat, 1 = 2nd cat, 2 = 3rd cat
+  
+  // Customization
+  name           String   @default("Mochi (โมจิ)")
+  gender         String   @default("boy")
+  breed          String   @default("orange_tabby")
+  bodyType       String   @default("chonky")
+  earType        String   @default("pointed")
+  tailType       String   @default("fluffy")
+  eyeType        String   @default("sparkle")
+  eyeColorLeft   String   @default("#2ec4b6")
+  eyeColorRight  String   @default("#ffbf69")
+  baseColor      String   @default("#ffa94d")
+  patternType    String   @default("tabby")
+  patternColor   String   @default("#d97706")
+  snoutColor     String   @default("#ffffff")
+  pawColor       String   @default("#ffffff")
+  bellyColor     String   @default("#fff3bf")
+  accessoryHead  String   @default("straw_hat")
+  accessoryNeck  String   @default("gold_bell")
+  accessoryBack  String   @default("backpack")
+  accessoryFace  String   @default("cute_blush")
+  aura           String   @default("sparkles")
+  personality    String   @default("chaotic")
+  
+  // JSON Blobs for Full Expansion Persistence
+  statsJson          String   @default("{}")
+  unlockedItemsJson  String   @default("[\"straw_hat\",\"gold_bell\",\"backpack\",\"cute_blush\",\"sparkles\"]")
+  photosJson         String   @default("[]")
+  friendsJson        String   @default("[]")
+  diaryJson          String   @default("[]")
+  achievementsJson   String   @default("[]")
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Room {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   @default("public") // "public" or "private"
+  passcode    String?  // PIN code for private rooms
+  theme       String   @default("sakura") // "sakura", "sunshine", "moonlight"
+  maxCapacity Int      @default(20)
+  createdAt   DateTime @default(now())
+}
