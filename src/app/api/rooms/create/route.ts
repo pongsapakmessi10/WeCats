@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
     const body = await request.json();
     const { name, passcode, theme = 'sakura', maxCapacity = 10 } = body;
 
@@ -23,8 +21,6 @@ export async function POST(request: Request) {
         passcode,
         theme,
         maxCapacity: Number(maxCapacity) || 10,
-        currentCount: 1,
-        createdBy: session?.userId || 'Guest',
       },
     });
 
