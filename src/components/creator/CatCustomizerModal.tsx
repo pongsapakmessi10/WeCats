@@ -45,6 +45,75 @@ const EYE_COLOR_SWATCHES = [
   '#4a3b32', // Deep Hazel
 ];
 
+const ColorPickerInput: React.FC<{
+  label: string;
+  value: string;
+  onChange: (color: string) => void;
+  swatches?: string[];
+}> = ({ label, value, onChange, swatches = PASTEL_COLOR_SWATCHES }) => {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <label className="font-itim font-bold text-xs text-[#523e32]">{label}</label>
+        {/* Hex Code & Color Picker Pill */}
+        <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border-2 border-[#ebd9c8] shadow-sm">
+          <label className="relative w-5 h-5 rounded-lg border-2 border-[#523e32]/50 overflow-hidden shadow-inner cursor-pointer" style={{ backgroundColor: value }}>
+            <input
+              type="color"
+              value={value.startsWith('#') && value.length === 7 ? value : '#ffa94d'}
+              onChange={(e) => onChange(e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              title="คลิกเพื่อเลือกสีอิสระ (Color Wheel)"
+            />
+          </label>
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="#FFA94D"
+            maxLength={7}
+            className="w-18 font-fredoka font-bold text-xs text-[#523e32] bg-transparent focus:outline-none uppercase"
+          />
+        </div>
+      </div>
+
+      {/* Preset Swatches + Color Wheel Button */}
+      <div className="flex flex-wrap items-center gap-1.5 bg-white p-2.5 rounded-2xl border-2 border-[#ebd9c8]">
+        {swatches.map((color) => (
+          <button
+            key={color}
+            onClick={() => {
+              soundManager.playPop();
+              onChange(color);
+            }}
+            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl border-2 transition-transform cursor-pointer ${
+              value.toLowerCase() === color.toLowerCase()
+                ? 'border-[#523e32] scale-110 shadow-md ring-2 ring-[#ffcad4]'
+                : 'border-white/60 hover:scale-105'
+            }`}
+            style={{ backgroundColor: color }}
+            title={color}
+          />
+        ))}
+
+        {/* Custom Color Wheel Picker */}
+        <label
+          className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl border-2 border-dashed border-[#523e32] bg-gradient-to-tr from-[#ff0055] via-[#00ff88] to-[#0088ff] flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-transform shadow-sm ml-auto"
+          title="จานสีอิสระ (Custom Hex Color Wheel)"
+        >
+          <Palette size={14} className="text-white drop-shadow" />
+          <input
+            type="color"
+            value={value.startsWith('#') && value.length === 7 ? value : '#ffa94d'}
+            onChange={(e) => onChange(e.target.value)}
+            className="sr-only"
+          />
+        </label>
+      </div>
+    </div>
+  );
+};
+
 const DEFAULT_CUSTOMIZER_CAT: CatCustomization = {
   name: 'Mochi (โมจิ)',
   gender: 'boy',
@@ -371,48 +440,24 @@ export const CatCustomizerModal: React.FC = () => {
                         eyeColorRight: myCat.eyeColorLeft,
                       });
                     }}
-                    className="text-xs font-itim text-[#8d7568] underline"
+                    className="text-xs font-itim text-[#8d7568] hover:text-[#523e32] underline cursor-pointer"
                   >
-                    ตั้งสีตาเท่ากัน
+                    ตั้งสีตาให้เท่ากัน
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-3 bg-white p-3 rounded-2xl border-2 border-[#ebd9c8]">
-                  <div>
-                    <span className="font-itim text-xs text-[#8d7568] block mb-1">ตาข้างซ้าย (Left)</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {EYE_COLOR_SWATCHES.map((color) => (
-                        <button
-                          key={`left-${color}`}
-                          onClick={() => {
-                            soundManager.playPop();
-                            updateCustomization({ eyeColorLeft: color });
-                          }}
-                          className={`w-6 h-6 rounded-full border-2 ${
-                            myCat.eyeColorLeft === color ? 'border-[#523e32] scale-110' : 'border-transparent'
-                          }`}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="font-itim text-xs text-[#8d7568] block mb-1">ตาข้างขวา (Right)</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {EYE_COLOR_SWATCHES.map((color) => (
-                        <button
-                          key={`right-${color}`}
-                          onClick={() => {
-                            soundManager.playPop();
-                            updateCustomization({ eyeColorRight: color });
-                          }}
-                          className={`w-6 h-6 rounded-full border-2 ${
-                            myCat.eyeColorRight === color ? 'border-[#523e32] scale-110' : 'border-transparent'
-                          }`}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <ColorPickerInput
+                    label="ตาข้างซ้าย (Left Eye)"
+                    value={myCat.eyeColorLeft}
+                    onChange={(color) => updateCustomization({ eyeColorLeft: color })}
+                    swatches={EYE_COLOR_SWATCHES}
+                  />
+                  <ColorPickerInput
+                    label="ตาข้างขวา (Right Eye)"
+                    value={myCat.eyeColorRight}
+                    onChange={(color) => updateCustomization({ eyeColorRight: color })}
+                    swatches={EYE_COLOR_SWATCHES}
+                  />
                 </div>
               </div>
             </div>
@@ -451,44 +496,44 @@ export const CatCustomizerModal: React.FC = () => {
               </div>
 
               {/* Base Fur Color */}
-              <div className="space-y-2">
-                <label className="font-itim font-bold text-sm text-[#523e32]">สีขนหลัก (Base Color)</label>
-                <div className="flex flex-wrap gap-2 bg-white p-3 rounded-2xl border-2 border-[#ebd9c8]">
-                  {PASTEL_COLOR_SWATCHES.map((color) => (
-                    <button
-                      key={`base-${color}`}
-                      onClick={() => {
-                        soundManager.playPop();
-                        updateCustomization({ baseColor: color });
-                      }}
-                      className={`w-9 h-9 rounded-2xl border-3 transition-transform ${
-                        myCat.baseColor === color ? 'border-[#523e32] scale-110 shadow-md' : 'border-white/60'
-                      }`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-              </div>
+              <ColorPickerInput
+                label="สีขนหลัก (Base Fur Color)"
+                value={myCat.baseColor}
+                onChange={(color) => updateCustomization({ baseColor: color })}
+                swatches={PASTEL_COLOR_SWATCHES}
+              />
 
               {/* Secondary Pattern Color */}
-              <div className="space-y-2">
-                <label className="font-itim font-bold text-sm text-[#523e32]">สีลวดลาย (Pattern Color)</label>
-                <div className="flex flex-wrap gap-2 bg-white p-3 rounded-2xl border-2 border-[#ebd9c8]">
-                  {PASTEL_COLOR_SWATCHES.map((color) => (
-                    <button
-                      key={`pattern-${color}`}
-                      onClick={() => {
-                        soundManager.playPop();
-                        updateCustomization({ patternColor: color });
-                      }}
-                      className={`w-9 h-9 rounded-2xl border-3 transition-transform ${
-                        myCat.patternColor === color ? 'border-[#523e32] scale-110 shadow-md' : 'border-white/60'
-                      }`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-              </div>
+              <ColorPickerInput
+                label="สีลวดลาย (Pattern Stripe Color)"
+                value={myCat.patternColor}
+                onChange={(color) => updateCustomization({ patternColor: color })}
+                swatches={PASTEL_COLOR_SWATCHES}
+              />
+
+              {/* Snout & Muzzle Color */}
+              <ColorPickerInput
+                label="สีปาก & จมูก (Snout & Muzzle Color)"
+                value={myCat.snoutColor}
+                onChange={(color) => updateCustomization({ snoutColor: color })}
+                swatches={['#ffffff', '#fff3bf', '#faedcd', '#ffa94d', '#2b2d42', '#d4a373', '#ffcad4']}
+              />
+
+              {/* Belly Color */}
+              <ColorPickerInput
+                label="สีพุง & หน้าอก (Belly Color)"
+                value={myCat.bellyColor}
+                onChange={(color) => updateCustomization({ bellyColor: color })}
+                swatches={['#fff3bf', '#ffffff', '#faedcd', '#ffcad4', '#d4a373', '#2b2d42']}
+              />
+
+              {/* Paw Color */}
+              <ColorPickerInput
+                label="สีอุ้งเท้า (Paws Color)"
+                value={myCat.pawColor}
+                onChange={(color) => updateCustomization({ pawColor: color })}
+                swatches={['#ffffff', '#fff3bf', '#ffcad4', '#ffa94d', '#2b2d42', '#d4a373']}
+              />
             </div>
           )}
 
