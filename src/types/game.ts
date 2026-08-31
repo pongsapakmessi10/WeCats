@@ -68,20 +68,22 @@ export type CatBehavior =
 
 export interface OnlineCat {
   id: string;
-  isSelf: boolean;
+  isSelf?: boolean;
   customization: CatCustomization;
   stats: CatStats;
   x: number;
   y: number;
-  vx: number;
-  vy: number;
+  vx?: number;
+  vy?: number;
   direction: 'up' | 'down' | 'left' | 'right';
   behavior: CatBehavior;
-  currentEmote: string | null;
-  emoteTimer: number;
-  chatMessage: string | null;
-  chatTimer: number;
+  isMoving?: boolean;
+  currentEmote?: string | null;
+  emoteTimer?: number;
+  chatMessage?: string | null;
+  chatTimer?: number;
   targetCatId?: string | null;
+  lastUpdated?: number;
 }
 
 export interface InteractiveProp {

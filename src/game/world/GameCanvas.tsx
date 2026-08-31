@@ -5,6 +5,7 @@ import { useCatStore, PLAZA_PROPS } from '@/store/catStore';
 import { CatRenderer } from '@/game/renderer/CatRenderer';
 import { soundManager } from '@/audio/soundManager';
 import { InteractiveProp, OnlineCat } from '@/types/game';
+import { useMultiplayer } from '@/game/multiplayer/useMultiplayer';
 
 interface GameCanvasProps {
   onOpenCustomizer: () => void;
@@ -12,6 +13,7 @@ interface GameCanvasProps {
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const { sendMyPosition } = useMultiplayer('presence-plaza-1');
 
   // Store bindings
   const myCat = useCatStore((state) => state.myCat);
@@ -176,6 +178,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
 
       const isMoving = Math.abs(playerPosRef.current.vx) > 8 || Math.abs(playerPosRef.current.vy) > 8;
 
+      // Broadcast real-time position to other players
+      sendMyPosition(
+        Math.round(playerPosRef.current.x),
+        Math.round(playerPosRef.current.y),
+        playerPosRef.current.dir,
+        isMoving,
+        stats.isZooming ? 'zoomies' : isMoving ? 'walking' : 'idle'
+      );
+
       // Compute dynamic responsive positions for plaza props
       const dynamicProps = PLAZA_PROPS.map((p) => {
         let px = centerX;
@@ -220,16 +231,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       // 3. Check Proximity to Other Online Cats
       let nearestCat: OnlineCat | null = null;
       let minCatDist = 90;
-      onlineCats.forEach((cat, idx) => {
-        // Position online cats relative to screen center
-        let cx = centerX + (idx === 0 ? -120 : idx === 1 ? 220 : -200);
-        let cy = centerY + (idx === 0 ? 60 : idx === 1 ? -40 : 160);
-        if (cat.behavior === 'zoomies') {
-          cx += Math.sin(currentTime / 300) * 150;
-        }
-        const dist = Math.hypot(playerPosRef.current.x - cx, playerPosRef.current.y - cy);
+      onlineCats.forEach((cat) => {
+        const dist = Math.hypot(playerPosRef.current.x - cat.x, playerPosRef.current.y - cat.y);
         if (dist < minCatDist) {
-          nearestCat = { ...cat, x: cx, y: cy };
+          nearestCat = cat;
           minCatDist = dist;
         }
       });
@@ -290,18 +295,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
         direction: playerPosRef.current.dir,
       });
 
-      onlineCats.forEach((oc, idx) => {
-        let cx = centerX + (idx === 0 ? -120 : idx === 1 ? 220 : -200);
-        let cy = centerY + (idx === 0 ? 60 : idx === 1 ? -40 : 160);
-        if (oc.behavior === 'zoomies') {
-          cx += Math.sin(currentTime / 300) * 150;
-        }
+      onlineCats.forEach((oc) => {
         entities.push({
           type: 'online_cat',
-          y: cy,
-          x: cx,
-          catData: { ...oc, x: cx, y: cy },
-          isMoving: oc.behavior === 'walking' || oc.behavior === 'zoomies',
+          y: oc.y,
+          x: oc.x,
+          catData: oc,
+          isMoving: oc.isMoving || oc.behavior === 'walking' || oc.behavior === 'zoomies',
           direction: oc.direction,
         });
       });

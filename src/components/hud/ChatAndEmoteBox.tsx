@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useCatStore } from '@/store/catStore';
 import { soundManager } from '@/audio/soundManager';
 import { MessageCircle, Send, Smile, ChevronDown, ChevronUp } from 'lucide-react';
+import { useMultiplayer } from '@/game/multiplayer/useMultiplayer';
 
 const EMOTE_LIST = ['💖', '🐾', '🐟', '💤', '⚡', '🌸', '👑', '❓', '🐱', '✨'];
 
@@ -11,6 +12,8 @@ export const ChatAndEmoteBox: React.FC = () => {
   const chatMessages = useCatStore((state) => state.chatMessages);
   const sendChatMessage = useCatStore((state) => state.sendChatMessage);
   const sendEmote = useCatStore((state) => state.sendEmote);
+  const { sendMyChat } = useMultiplayer('presence-plaza-1');
+
   const [inputText, setInputText] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -18,8 +21,16 @@ export const ChatAndEmoteBox: React.FC = () => {
     if (e) e.preventDefault();
     if (!inputText.trim()) return;
     soundManager.playPop();
-    sendChatMessage(inputText.trim());
+    const text = inputText.trim();
+    sendChatMessage(text);
+    sendMyChat(text);
     setInputText('');
+  };
+
+  const handleEmoteClick = (emote: string) => {
+    soundManager.playPop();
+    sendEmote(emote);
+    sendMyChat(undefined, emote);
   };
 
   return (
@@ -30,11 +41,9 @@ export const ChatAndEmoteBox: React.FC = () => {
         {EMOTE_LIST.map((emote) => (
           <button
             key={emote}
-            onClick={() => {
-              soundManager.playPop();
-              sendEmote(emote);
-            }}
-            className="hover:scale-125 active:scale-95 transition-transform text-lg p-1"
+            onClick={() => handleEmoteClick(emote)}
+            className="hover:scale-125 active:scale-95 transition-transform text-lg p-1 cursor-pointer"
+            title={`ส่ง Emote ${emote}`}
           >
             {emote}
           </button>
@@ -51,7 +60,7 @@ export const ChatAndEmoteBox: React.FC = () => {
         >
           <div className="flex items-center gap-2">
             <MessageCircle size={15} className="text-[#523e32]" />
-            <span className="font-fredoka font-bold text-xs text-[#523e32]">Plaza Chat</span>
+            <span className="font-fredoka font-bold text-xs text-[#523e32]">Plaza Chat (คุยสด)</span>
           </div>
           <button className="text-[#8d7568]">
             {isExpanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
@@ -62,7 +71,7 @@ export const ChatAndEmoteBox: React.FC = () => {
         {isExpanded && (
           <div className="p-3 h-48 overflow-y-auto space-y-2 font-itim text-xs">
             {chatMessages.map((msg) => {
-              const isMe = msg.senderId === 'player-self';
+              const isMe = msg.senderId === 'self' || msg.senderId === 'player-self';
               return (
                 <div
                   key={msg.id}
@@ -98,7 +107,7 @@ export const ChatAndEmoteBox: React.FC = () => {
           />
           <button
             type="submit"
-            className="p-2 rounded-xl bg-[#ffcad4] text-[#523e32] border border-[#523e32] hover:bg-[#ffb5c5] active:scale-95 transition-all"
+            className="p-2 rounded-xl bg-[#ffcad4] text-[#523e32] border border-[#523e32] hover:bg-[#ffb5c5] active:scale-95 transition-all cursor-pointer"
           >
             <Send size={13} />
           </button>

@@ -431,6 +431,7 @@ interface CatStoreState {
   sendChatMessage: (text: string) => void;
   sendEmote: (emote: string) => void;
   setSelectedNearbyCat: (cat: OnlineCat | null) => void;
+  setOnlineCats: (catsOrUpdater: OnlineCat[] | ((prev: OnlineCat[]) => OnlineCat[])) => void;
   setActiveNearbyProp: (prop: InteractiveProp | null) => void;
   setNotification: (text: string) => void;
   tickBiology: () => void;
@@ -899,6 +900,10 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   },
 
   setSelectedNearbyCat: (cat) => set({ selectedNearbyCat: cat }),
+  setOnlineCats: (catsOrUpdater) =>
+    set((state) => ({
+      onlineCats: typeof catsOrUpdater === 'function' ? catsOrUpdater(state.onlineCats) : catsOrUpdater,
+    })),
   setActiveNearbyProp: (prop) => set({ activeNearbyProp: prop }),
   setNotification: (text) => set({ notificationText: text }),
 
