@@ -168,3 +168,13 @@ export interface CatSlot {
   customization: CatCustomization;
   stats: CatStats;
 }
+
+export interface RoomData {
+  id: string;
+  name: string;
+  type: 'public' | 'private';
+  theme: 'sakura' | 'sunshine' | 'moonlight';
+  maxCapacity: number;
+  currentCount?: number;
+}
+

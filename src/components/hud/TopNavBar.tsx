@@ -129,7 +129,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                 title="คลิกเพื่อสลับห้อง / สร้างห้องส่วนตัว"
               >
                 <Radio size={12} className="shrink-0" />
-                <span className="whitespace-nowrap">🌸 Plaza #1</span>
+                <span className="whitespace-nowrap font-bold">{useCatStore((state) => state.currentRoom.name)}</span>
               </button>
 
               {/* Fish Coins Balance Pill */}

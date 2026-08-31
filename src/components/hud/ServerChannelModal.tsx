@@ -38,16 +38,22 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
   const [selectedPrivateRoom, setSelectedPrivateRoom] = useState<RoomItem | null>(null);
   const [enterPin, setEnterPin] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const currentRoom = useCatStore((state) => state.currentRoom);
+  const setCurrentRoom = useCatStore((state) => state.setCurrentRoom);
+
+  const fetchRooms = () => {
+    fetch('/api/rooms')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.publicChannels) setPublicChannels(data.publicChannels);
+        if (data.privateRooms) setPrivateRooms(data.privateRooms);
+      })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     if (isOpen) {
-      fetch('/api/rooms')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.publicChannels) setPublicChannels(data.publicChannels);
-          if (data.privateRooms) setPrivateRooms(data.privateRooms);
-        })
-        .catch(() => {});
+      fetchRooms();
     }
   }, [isOpen]);
 
@@ -55,18 +61,13 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
 
   const handleSelectPublic = (channel: RoomItem) => {
     soundManager.playSparkle();
-    setCurrentRoomId(channel.id);
-
-    // Switch Day/Night according to theme
-    if (channel.theme === 'moonlight') {
-      useCatStore.setState({ timeOfDay: 'night' });
-    } else if (channel.theme === 'sunshine') {
-      useCatStore.setState({ timeOfDay: 'afternoon' });
-    } else {
-      useCatStore.setState({ timeOfDay: 'morning' });
-    }
-
-    useCatStore.getState().setNotification(`ย้ายไปยังห้อง ${channel.name} สำเร็จ! 🐾`);
+    setCurrentRoom({
+      id: channel.id,
+      name: channel.name,
+      type: 'public',
+      theme: channel.theme as any,
+      maxCapacity: channel.maxCapacity,
+    });
     onClose();
   };
 
@@ -91,8 +92,13 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
       }
 
       soundManager.playSparkle();
-      setCurrentRoomId(data.room.id);
-      useCatStore.getState().setNotification(`สร้างห้องส่วนตัว "${data.room.name}" สำเร็จ! รหัส PIN: ${newRoomPin} 🔒`);
+      setCurrentRoom({
+        id: data.room.id,
+        name: data.room.name,
+        type: 'private',
+        theme: data.room.theme as any,
+        maxCapacity: data.room.maxCapacity,
+      });
       onClose();
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการสร้างห้อง');
@@ -120,8 +126,13 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
       }
 
       soundManager.playSparkle();
-      setCurrentRoomId(data.room.id);
-      useCatStore.getState().setNotification(`เข้าร่วมห้องส่วนตัว "${data.room.name}" สำเร็จ! 🔒`);
+      setCurrentRoom({
+        id: data.room.id,
+        name: data.room.name,
+        type: 'private',
+        theme: data.room.theme as any,
+        maxCapacity: data.room.maxCapacity,
+      });
       onClose();
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'รหัส PIN ไม่ถูกต้อง');
@@ -161,8 +172,9 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
               soundManager.playPop();
               setActiveTab('public');
               setErrorMsg(null);
+              fetchRooms();
             }}
-            className={`py-2 rounded-xl text-xs font-fredoka font-bold transition-all ${
+            className={`py-2 rounded-xl text-xs font-fredoka font-bold transition-all cursor-pointer ${
               activeTab === 'public' ? 'bg-white text-[#523e32] shadow-sm' : 'text-[#8d7568]'
             }`}
           >
@@ -173,8 +185,9 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
               soundManager.playPop();
               setActiveTab('private');
               setErrorMsg(null);
+              fetchRooms();
             }}
-            className={`py-2 rounded-xl text-xs font-fredoka font-bold transition-all ${
+            className={`py-2 rounded-xl text-xs font-fredoka font-bold transition-all cursor-pointer ${
               activeTab === 'private' ? 'bg-white text-[#523e32] shadow-sm' : 'text-[#8d7568]'
             }`}
           >
@@ -186,7 +199,7 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
               setActiveTab('create');
               setErrorMsg(null);
             }}
-            className={`py-2 rounded-xl text-xs font-fredoka font-bold transition-all ${
+            className={`py-2 rounded-xl text-xs font-fredoka font-bold transition-all cursor-pointer ${
               activeTab === 'create' ? 'bg-white text-[#523e32] shadow-sm' : 'text-[#8d7568]'
             }`}
           >
@@ -250,26 +263,37 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
               </div>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                {privateRooms.map((room) => (
-                  <div
-                    key={room.id}
-                    onClick={() => {
-                      soundManager.playPop();
-                      setSelectedPrivateRoom(room);
-                    }}
-                    className={`p-3 rounded-2xl border-2 cursor-pointer flex items-center justify-between ${
-                      selectedPrivateRoom?.id === room.id ? 'bg-[#ffe5a3] border-[#523e32]' : 'bg-white border-[#ebd9c8]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Lock size={16} className="text-[#523e32]" />
-                      <span className="font-fredoka font-bold text-xs text-[#523e32]">{room.name}</span>
+                {privateRooms.map((room) => {
+                  const isCurrent = currentRoom.id === room.id;
+                  const isSelected = selectedPrivateRoom?.id === room.id;
+                  return (
+                    <div
+                      key={room.id}
+                      onClick={() => {
+                        soundManager.playPop();
+                        setSelectedPrivateRoom(room);
+                      }}
+                      className={`p-3 rounded-2xl border-2 cursor-pointer flex items-center justify-between ${
+                        isCurrent
+                          ? 'bg-[#ffcad4] border-[#523e32] shadow-md'
+                          : isSelected
+                          ? 'bg-[#ffe5a3] border-[#523e32]'
+                          : 'bg-white border-[#ebd9c8]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Lock size={16} className={isCurrent ? 'text-[#523e32]' : 'text-[#8d7568]'} />
+                        <span className="font-fredoka font-bold text-xs text-[#523e32]">{room.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="badge-pill bg-white text-[11px] font-fredoka">
+                          {room.currentCount}/{room.maxCapacity} แมว
+                        </span>
+                        {isCurrent && <Check size={16} className="text-emerald-700 font-bold" />}
+                      </div>
                     </div>
-                    <span className="badge-pill bg-white text-[11px] font-fredoka">
-                      {room.currentCount}/{room.maxCapacity} แมว
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

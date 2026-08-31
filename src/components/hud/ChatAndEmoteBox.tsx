@@ -12,7 +12,8 @@ export const ChatAndEmoteBox: React.FC = () => {
   const chatMessages = useCatStore((state) => state.chatMessages);
   const sendChatMessage = useCatStore((state) => state.sendChatMessage);
   const sendEmote = useCatStore((state) => state.sendEmote);
-  const { sendMyChat } = useMultiplayer('presence-plaza-1');
+  const currentRoom = useCatStore((state) => state.currentRoom);
+  const { sendMyChat } = useMultiplayer(`presence-${currentRoom.id}`);
 
   const [inputText, setInputText] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);

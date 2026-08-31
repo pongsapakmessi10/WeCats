@@ -13,7 +13,8 @@ interface GameCanvasProps {
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { sendMyPosition } = useMultiplayer('presence-plaza-1');
+  const currentRoom = useCatStore((state) => state.currentRoom);
+  const { sendMyPosition } = useMultiplayer(`presence-${currentRoom.id}`);
 
   // Store bindings
   const myCat = useCatStore((state) => state.myCat);

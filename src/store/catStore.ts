@@ -12,6 +12,7 @@ import {
   FriendData,
   Achievement,
   CatSlot,
+  RoomData,
 } from '@/types/game';
 
 export const SHOP_CATALOG: ShopItem[] = [
@@ -387,8 +388,10 @@ interface CatStoreState {
   activeNearbyProp: InteractiveProp | null;
   notificationText: string;
   timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night';
+  currentRoom: RoomData;
 
   // Modal Setters
+  setCurrentRoom: (room: RoomData) => void;
   setCustomizerOpen: (open: boolean) => void;
   setProfileOpen: (open: boolean) => void;
   setPhotoMode: (photo: boolean) => void;
@@ -502,9 +505,29 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   isSoundEnabled: false,
   selectedNearbyCat: null,
   activeNearbyProp: null,
-  notificationText: 'ยินดีต้อนรับสู่ WeCats Plaza! ใช้ปุ่ม W,A,S,D เพื่อเดินสำรวจ 🐱',
-  timeOfDay: 'afternoon',
+  notificationText: 'ยินดีต้อนรับสู่ WeCats Plaza! กด [E] เพื่อโต้ตอบกับสิ่งของ 🐾',
+  timeOfDay: 'morning',
+  currentRoom: {
+    id: 'public-sakura',
+    name: 'Plaza #1: สวนซากุระ 🌸',
+    type: 'public',
+    theme: 'sakura',
+    maxCapacity: 20,
+  },
 
+  // Modal Setters
+  setCurrentRoom: (room) => {
+    let timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night' = 'morning';
+    if (room.theme === 'moonlight') timeOfDay = 'night';
+    else if (room.theme === 'sunshine') timeOfDay = 'afternoon';
+
+    set({
+      currentRoom: room,
+      onlineCats: [], // reset room members for new room
+      timeOfDay,
+    });
+    get().setNotification(`ย้ายเข้าสู่ห้อง "${room.name}" สำเร็จ! 🐾`);
+  },
   setCustomizerOpen: (open) => set({ isCustomizerOpen: open }),
   setProfileOpen: (open) => set({ isProfileOpen: open }),
   setPhotoMode: (photo) => set({ isPhotoMode: photo }),
