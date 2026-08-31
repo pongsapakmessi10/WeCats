@@ -20,11 +20,14 @@ export async function POST(request: Request) {
     };
 
     // Trigger event to all clients in channel (optionally exclude sender socketId)
-    await pusherServer.trigger(channel, event, payload, socketId ? { socket_id: socketId } : undefined);
+    if (process.env.PUSHER_APP_ID && process.env.PUSHER_KEY && process.env.PUSHER_SECRET) {
+      await pusherServer.trigger(channel, event, payload, socketId ? { socket_id: socketId } : undefined);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Pusher trigger error:', error);
-    return NextResponse.json({ error: 'Failed to broadcast event' }, { status: 500 });
+    // Gracefully handle unconfigured pusher or rate limits without 500 spam
+    console.warn('Pusher trigger warning:', error);
+    return NextResponse.json({ success: false, warning: 'Pusher event trigger skipped' }, { status: 200 });
   }
 }

@@ -30,6 +30,7 @@ export function useMultiplayer(rawChannelName: string = 'presence-public-sakura'
   }, [myCat, stats]);
 
   const lastMoveSentRef = useRef<number>(0);
+  const wasMovingRef = useRef<boolean>(false);
   const myIdRef = useRef<string>(`cat_${Math.random().toString(36).substring(2, 9)}`);
   const channelRef = useRef<any>(null);
 
@@ -288,16 +289,34 @@ export function useMultiplayer(rawChannelName: string = 'presence-public-sakura'
   const sendMyPosition = useCallback(
     (x: number, y: number, direction: 'up' | 'down' | 'left' | 'right', isMoving: boolean, behavior: string = 'idle') => {
       const now = Date.now();
-      // Throttle: send every 60ms when moving, or immediately when stopping
-      if (!isMoving || now - lastMoveSentRef.current >= 60) {
-        lastMoveSentRef.current = now;
-        broadcastEvent('cat-move', {
-          x,
-          y,
-          direction,
-          isMoving,
-          behavior,
-        });
+
+      if (isMoving) {
+        wasMovingRef.current = true;
+        // Throttle movement updates to every 100ms (10 msgs/sec max)
+        if (now - lastMoveSentRef.current >= 100) {
+          lastMoveSentRef.current = now;
+          broadcastEvent('cat-move', {
+            x,
+            y,
+            direction,
+            isMoving: true,
+            behavior,
+          });
+        }
+      } else {
+        // If we were moving and just stopped, send ONE final stop packet
+        if (wasMovingRef.current) {
+          wasMovingRef.current = false;
+          lastMoveSentRef.current = now;
+          broadcastEvent('cat-move', {
+            x,
+            y,
+            direction,
+            isMoving: false,
+            behavior: 'idle',
+          });
+        }
+        // When stationary and already sent stop packet: DO NOTHING! 0 requests!
       }
     },
     [broadcastEvent]
