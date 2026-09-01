@@ -21,6 +21,14 @@ import {
   broadcastLiveFriendAccepted,
   broadcastLiveDirectMessage,
 } from '@/game/multiplayer/broadcast';
+import {
+  broadcastCrossTabChat,
+  broadcastCrossTabRoom,
+  broadcastCrossTabStats,
+  broadcastCrossTabFriendRequest,
+  broadcastCrossTabFriendAccepted,
+  broadcastCrossTabDM,
+} from '@/game/sync/crossTabSync';
 
 export const SHOP_CATALOG: ShopItem[] = [
   // HATS
@@ -244,6 +252,45 @@ export const PLAZA_PROPS: InteractiveProp[] = [
   },
 ];
 
+function loadInitialChatHistory(): Record<string, ChatMessage[]> {
+  const defaultHistory: Record<string, ChatMessage[]> = {
+    'public-sakura': [
+      {
+        id: 'msg-welcome-sakura',
+        senderId: 'system',
+        senderName: 'ระบบ Plaza',
+        text: 'ยินดีต้อนรับสู่ สวนซากุระ Plaza #1! วิ่งเล่นและคุยกับเพื่อนแมวได้เลย 🌸',
+        timestamp: Date.now(),
+      },
+    ],
+  };
+
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('wecats_chat_history_by_room');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return { ...defaultHistory, ...parsed };
+        }
+      }
+    } catch {}
+  }
+  return defaultHistory;
+}
+
+function saveChatHistory(history: Record<string, ChatMessage[]>) {
+  if (typeof window !== 'undefined') {
+    try {
+      const pruned: Record<string, ChatMessage[]> = {};
+      Object.keys(history).forEach((roomId) => {
+        pruned[roomId] = (history[roomId] || []).slice(-60);
+      });
+      localStorage.setItem('wecats_chat_history_by_room', JSON.stringify(pruned));
+    } catch {}
+  }
+}
+
 interface CatStoreState {
   myCat: CatCustomization;
   stats: CatStats;
@@ -344,6 +391,12 @@ interface CatStoreState {
   sendChatMessage: (text: string) => void;
   sendEmote: (emote: string) => void;
   receiveChatMessage: (senderId: string, senderName: string, text: string, roomId?: string) => void;
+  syncCrossTabChatMessage: (roomId: string, message: ChatMessage) => void;
+  syncCrossTabRoom: (room: RoomData) => void;
+  syncCrossTabStats: (stats: CatStats, fishCoins?: number, unlockedItems?: string[]) => void;
+  syncCrossTabFriendRequest: (request: FriendRequest) => void;
+  syncCrossTabFriendAccepted: (friend: FriendData) => void;
+  syncCrossTabDM: (friendId: string, message: DirectMessage) => void;
   setIsChatExpanded: (expanded: boolean) => void;
   clearUnreadChat: () => void;
   setSelectedNearbyCat: (cat: OnlineCat | null) => void;
@@ -357,7 +410,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   myCat: DEFAULT_CAT,
   stats: DEFAULT_STATS,
   onlineCats: [],
-  chatMessages: [
+  chatMessages: (loadInitialChatHistory()['public-sakura']) || [
     {
       id: 'msg-welcome',
       senderId: 'system',
@@ -366,17 +419,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       timestamp: Date.now(),
     },
   ],
-  chatMessagesByRoom: {
-    'public-sakura': [
-      {
-        id: 'msg-welcome-sakura',
-        senderId: 'system',
-        senderName: 'ระบบ Plaza',
-        text: 'ยินดีต้อนรับสู่ สวนซากุระ Plaza #1! วิ่งเล่นและคุยกับเพื่อนแมวได้เลย 🌸',
-        timestamp: Date.now(),
-      },
-    ],
-  },
+  chatMessagesByRoom: loadInitialChatHistory(),
   unreadChatCount: 0,
   isChatExpanded: true,
   myCatChat: { text: null, emote: null },
@@ -473,6 +516,65 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       unreadChatCount: 0,
     });
     get().setNotification(`ย้ายเข้าสู่ห้อง "${room.name}" สำเร็จ! 🐾`);
+
+    // Sync room switch across other tabs of the same account
+    broadcastCrossTabRoom(room);
+  },
+
+  syncCrossTabRoom: (room) => {
+    let timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night' = 'morning';
+    if (room.theme === 'moonlight') timeOfDay = 'night';
+    else if (room.theme === 'sunshine') timeOfDay = 'afternoon';
+
+    const currentByRoom = { ...get().chatMessagesByRoom };
+    const activeMessages = currentByRoom[room.id] || [];
+
+    set({
+      currentRoom: room,
+      onlineCats: [],
+      timeOfDay,
+      chatMessages: activeMessages,
+      unreadChatCount: 0,
+    });
+  },
+
+  syncCrossTabStats: (stats, fishCoins, unlockedItems) => {
+    set((state) => ({
+      stats: stats || state.stats,
+      fishCoins: typeof fishCoins === 'number' ? fishCoins : state.fishCoins,
+      unlockedItems: unlockedItems || state.unlockedItems,
+    }));
+  },
+
+  syncCrossTabFriendRequest: (request) => {
+    set((state) => {
+      if (state.pendingFriendRequests.some((r) => r.id === request.id)) return state;
+      return {
+        pendingFriendRequests: [request, ...state.pendingFriendRequests],
+      };
+    });
+  },
+
+  syncCrossTabFriendAccepted: (friend) => {
+    set((state) => {
+      if (state.friends.some((f) => f.id === friend.id)) return state;
+      return {
+        friends: [...state.friends, friend],
+      };
+    });
+  },
+
+  syncCrossTabDM: (friendId, message) => {
+    set((state) => {
+      const existing = state.directMessages[friendId] || [];
+      if (existing.some((m) => m.id === message.id)) return state;
+      return {
+        directMessages: {
+          ...state.directMessages,
+          [friendId]: [...existing, message],
+        },
+      };
+    });
   },
 
   setRoomDeletedModal: (data) => set({ roomDeletedModal: data }),
@@ -649,6 +751,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
         pendingFriendRequests: [request, ...state.pendingFriendRequests],
       };
     });
+    broadcastCrossTabFriendRequest(request);
   },
 
   acceptFriendRequest: (requestId) => {
@@ -671,6 +774,8 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       pendingFriendRequests: state.pendingFriendRequests.filter((r) => r.id !== requestId),
       friends: state.friends.some((f) => f.id === req.senderId) ? state.friends : [...state.friends, newFriend],
     }));
+
+    broadcastCrossTabFriendAccepted(newFriend);
 
     get().addDiaryEntry(`ตอบรับคำขอเป็นเพื่อนกับ ${req.senderName} 💕`, 'กลายเป็นเพื่อนสนิทใน WeCats Plaza!', '💕', 25, 'social');
     get().addFishCoins(25);
@@ -696,6 +801,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
     };
 
     broadcastLiveDirectMessage(friendId, text);
+    broadcastCrossTabDM(friendId, dm);
 
     set((state) => ({
       directMessages: {
@@ -713,6 +819,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
         [friendKey]: [...(state.directMessages[friendKey] || []), msg],
       },
     }));
+    broadcastCrossTabDM(friendKey, msg);
   },
 
   sendTreatToFriend: (friendId) => {
@@ -817,16 +924,20 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
         'care'
       );
 
+      const updatedStats = {
+        ...state.stats,
+        hunger: newHunger,
+        happiness: newHappiness,
+        weightKg: newWeight,
+        affectionExp: newExp,
+        affectionLevel: newLevel,
+        lastFed: Date.now(),
+      };
+
+      broadcastCrossTabStats(updatedStats);
+
       return {
-        stats: {
-          ...state.stats,
-          hunger: newHunger,
-          happiness: newHappiness,
-          weightKg: newWeight,
-          affectionExp: newExp,
-          affectionLevel: newLevel,
-          lastFed: Date.now(),
-        },
+        stats: updatedStats,
       };
     });
   },
@@ -837,13 +948,18 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       const newExp = state.stats.affectionExp + 10;
       state.addFishCoins(5);
       state.addDiaryEntry('ดื่มน้ำสะอาด 💧', 'ความชุ่มชื้น +30%, ได้รับ +5 🐟', '💧', 5, 'care');
+
+      const updatedStats = {
+        ...state.stats,
+        hydration: newHydration,
+        affectionExp: newExp,
+        lastWatered: Date.now(),
+      };
+
+      broadcastCrossTabStats(updatedStats);
+
       return {
-        stats: {
-          ...state.stats,
-          hydration: newHydration,
-          affectionExp: newExp,
-          lastWatered: Date.now(),
-        },
+        stats: updatedStats,
       };
     });
   },
@@ -855,14 +971,19 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       const newExp = state.stats.affectionExp + 20;
       state.addFishCoins(15);
       state.addDiaryEntry('แปรงขนสางก้อนขน ✨', 'ความสะอาด +35%, ขนฟูนุ่มเงางาม, ได้รับ +15 🐟', '✨', 15, 'care');
+
+      const updatedStats = {
+        ...state.stats,
+        hygiene: newHygiene,
+        happiness: newHappiness,
+        affectionExp: newExp,
+        lastGroomed: Date.now(),
+      };
+
+      broadcastCrossTabStats(updatedStats);
+
       return {
-        stats: {
-          ...state.stats,
-          hygiene: newHygiene,
-          happiness: newHappiness,
-          affectionExp: newExp,
-          lastGroomed: Date.now(),
-        },
+        stats: updatedStats,
       };
     });
   },
@@ -874,13 +995,18 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       const newLevel = Math.floor(newExp / 100) + 1;
       state.addFishCoins(8);
       state.addDiaryEntry('ลูบหัวเกาคาง 💖', 'โมจินอนครางเพอร์อย่างมีความสุข, ได้รับ +8 🐟', '💖', 8, 'care');
+
+      const updatedStats = {
+        ...state.stats,
+        happiness: newHappiness,
+        affectionExp: newExp,
+        affectionLevel: newLevel,
+      };
+
+      broadcastCrossTabStats(updatedStats);
+
       return {
-        stats: {
-          ...state.stats,
-          happiness: newHappiness,
-          affectionExp: newExp,
-          affectionLevel: newLevel,
-        },
+        stats: updatedStats,
       };
     });
   },
@@ -893,13 +1019,18 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       }
       state.addFishCoins(20);
       state.addDiaryEntry('เริ่มการวิ่ง Zoomies กระจาย ⚡', 'โมจิออกวิ่งสปีดเต็มสปีดรอบ Plaza, ได้รับ +20 🐟', '⚡', 20, 'care');
+
+      const updatedStats = {
+        ...state.stats,
+        isZooming: true,
+        zoomiesEnergy: 0,
+        happiness: 100,
+      };
+
+      broadcastCrossTabStats(updatedStats);
+
       return {
-        stats: {
-          ...state.stats,
-          isZooming: true,
-          zoomiesEnergy: 0,
-          happiness: 100,
-        },
+        stats: updatedStats,
       };
     });
   },
@@ -974,15 +1105,21 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
     };
     set((state) => {
       const roomMsgs = [...(state.chatMessagesByRoom[roomId] || []), newMsg];
+      const updatedByRoom = {
+        ...state.chatMessagesByRoom,
+        [roomId]: roomMsgs,
+      };
+      saveChatHistory(updatedByRoom);
+
       return {
-        chatMessagesByRoom: {
-          ...state.chatMessagesByRoom,
-          [roomId]: roomMsgs,
-        },
+        chatMessagesByRoom: updatedByRoom,
         chatMessages: roomMsgs,
         myCatChat: { text, emote: null },
       };
     });
+
+    // Real-time broadcast to other tabs of the same browser
+    broadcastCrossTabChat(roomId, newMsg);
 
     setTimeout(() => {
       set({ myCatChat: { text: null, emote: null } });
@@ -1001,15 +1138,21 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
     };
     set((state) => {
       const roomMsgs = [...(state.chatMessagesByRoom[roomId] || []), newMsg];
+      const updatedByRoom = {
+        ...state.chatMessagesByRoom,
+        [roomId]: roomMsgs,
+      };
+      saveChatHistory(updatedByRoom);
+
       return {
-        chatMessagesByRoom: {
-          ...state.chatMessagesByRoom,
-          [roomId]: roomMsgs,
-        },
+        chatMessagesByRoom: updatedByRoom,
         chatMessages: roomMsgs,
         myCatChat: { text: null, emote },
       };
     });
+
+    // Real-time broadcast to other tabs of the same browser
+    broadcastCrossTabChat(roomId, newMsg);
 
     setTimeout(() => {
       set({ myCatChat: { text: null, emote: null } });
@@ -1027,19 +1170,49 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
     };
     set((state) => {
       const roomMsgs = [...(state.chatMessagesByRoom[roomId] || []), newMsg];
+      const updatedByRoom = {
+        ...state.chatMessagesByRoom,
+        [roomId]: roomMsgs,
+      };
+      saveChatHistory(updatedByRoom);
+
       const isCurrent = state.currentRoom.id === roomId;
       const isExpanded = state.isChatExpanded;
       const newUnread = isCurrent && !isExpanded ? state.unreadChatCount + 1 : state.unreadChatCount;
 
       return {
-        chatMessagesByRoom: {
-          ...state.chatMessagesByRoom,
-          [roomId]: roomMsgs,
-        },
+        chatMessagesByRoom: updatedByRoom,
         chatMessages: isCurrent ? roomMsgs : state.chatMessages,
         unreadChatCount: newUnread,
       };
     });
+  },
+
+  syncCrossTabChatMessage: (roomId, msg) => {
+    set((state) => {
+      const existingMsgs = state.chatMessagesByRoom[roomId] || [];
+      if (existingMsgs.some((m) => m.id === msg.id)) return state;
+
+      const roomMsgs = [...existingMsgs, msg];
+      const updatedByRoom = {
+        ...state.chatMessagesByRoom,
+        [roomId]: roomMsgs,
+      };
+      saveChatHistory(updatedByRoom);
+
+      const isCurrent = state.currentRoom.id === roomId;
+      return {
+        chatMessagesByRoom: updatedByRoom,
+        chatMessages: isCurrent ? roomMsgs : state.chatMessages,
+        myCatChat: msg.senderId === 'self' ? { text: msg.isEmote ? null : msg.text, emote: msg.isEmote ? msg.text : null } : state.myCatChat,
+      };
+    });
+
+    if (msg.senderId === 'self') {
+      setTimeout(() => {
+        set({ myCatChat: { text: null, emote: null } });
+      }, 4500);
+    }
   },
 
   setIsChatExpanded: (expanded) => {
@@ -1055,9 +1228,29 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
 
   setSelectedNearbyCat: (cat) => set({ selectedNearbyCat: cat }),
   setOnlineCats: (catsOrUpdater) =>
-    set((state) => ({
-      onlineCats: typeof catsOrUpdater === 'function' ? catsOrUpdater(state.onlineCats) : catsOrUpdater,
-    })),
+    set((state) => {
+      const raw = typeof catsOrUpdater === 'function' ? catsOrUpdater(state.onlineCats) : catsOrUpdater;
+      if (!Array.isArray(raw)) return state;
+
+      const myName = state.myCat.name;
+      const seen = new Set<string>();
+      const deduplicated: OnlineCat[] = [];
+
+      for (const cat of raw) {
+        if (!cat || !cat.id) continue;
+        const catName = cat.customization?.name;
+        // Exclude own cat
+        if (catName && catName === myName) continue;
+
+        const uniqueKey = catName || cat.id;
+        if (!seen.has(uniqueKey)) {
+          seen.add(uniqueKey);
+          deduplicated.push(cat);
+        }
+      }
+
+      return { onlineCats: deduplicated };
+    }),
   setActiveNearbyProp: (prop) => set({ activeNearbyProp: prop }),
   setNotification: (text) => set({ notificationText: text }),
 

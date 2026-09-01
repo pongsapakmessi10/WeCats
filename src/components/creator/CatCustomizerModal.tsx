@@ -22,6 +22,7 @@ import {
 } from '@/types/game';
 import { Sparkles, Heart, Shuffle, Check, X, Palette, Shirt, Cat, Flame } from 'lucide-react';
 import { broadcastP2PPacket } from '@/game/multiplayer/p2pManager';
+import { broadcastCrossTabCustomization } from '@/game/sync/crossTabSync';
 
 const PASTEL_COLOR_SWATCHES = [
   '#ffa94d', // Orange Tabby
@@ -772,6 +773,9 @@ export const CatCustomizerModal: React.FC = () => {
                   isMoving: false,
                   behavior: 'idle',
                 });
+
+                // Sync cat customization to other tabs of the same browser instantly
+                broadcastCrossTabCustomization(myCat);
 
                 useCatStore.getState().setNotification(`แปลงโฉมและบันทึก "${myCat.name}" เรียบร้อย! 🌸✨`);
 

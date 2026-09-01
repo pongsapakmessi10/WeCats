@@ -16,6 +16,7 @@ import {
   PetHeartIcon,
 } from '@/components/ui/GameIcons';
 import { UserPlus } from 'lucide-react';
+import { broadcastCrossTabPos, subscribeCrossTabSync } from '@/game/sync/crossTabSync';
 
 // --- FIXED VIRTUAL WORLD CONSTANTS (Resolution-Independent) ---
 export const WORLD_WIDTH = 1400;
@@ -105,7 +106,61 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
     } catch {}
   }, []);
 
+  // Listen for Cross-Tab & Cross-Session Real-Time Position Sync
+  useEffect(() => {
+    const applySync = (data: { x?: number; y?: number; dir?: 'up' | 'down' | 'left' | 'right'; direction?: 'up' | 'down' | 'left' | 'right' }) => {
+      const isLocallyPressing = Object.values(keysRef.current).some(Boolean);
+      if (!isLocallyPressing && typeof data?.x === 'number' && typeof data?.y === 'number') {
+        playerPosRef.current.x = data.x;
+        playerPosRef.current.y = data.y;
+        const d = data.dir || data.direction;
+        if (d) playerPosRef.current.dir = d;
+      }
+    };
+
+    const unsubscribe = subscribeCrossTabSync((msg) => {
+      if (msg.type === 'pos-sync') {
+        applySync(msg);
+      }
+    });
+
+    const handleSelfPosSync = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) applySync(detail);
+    };
+
+    window.addEventListener('wecats-self-pos-sync', handleSelfPosSync);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('wecats-self-pos-sync', handleSelfPosSync);
+    };
+  }, []);
+
   const keysRef = useRef<{ [key: string]: boolean }>({});
+  const joystickRef = useRef<{ x: number; y: number; isMoving: boolean; dir?: 'up' | 'down' | 'left' | 'right' }>({
+    x: 0,
+    y: 0,
+    isMoving: false,
+  });
+
+  // Listen for Touch Virtual Joystick events
+  useEffect(() => {
+    const handleJoystickMove = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) {
+        joystickRef.current = {
+          x: detail.x || 0,
+          y: detail.y || 0,
+          isMoving: !!detail.isMoving,
+          dir: detail.dir,
+        };
+      }
+    };
+
+    window.addEventListener('wecats-joystick-move', handleJoystickMove);
+    return () => window.removeEventListener('wecats-joystick-move', handleJoystickMove);
+  }, []);
 
   // Laser pointer position for zoomie event
   const laserRef = useRef({ x: 650, y: 650, targetX: 650, targetY: 650, active: false });
@@ -233,6 +288,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
 
       // 1. Process Player Movement (in World Coordinates)
       const keys = keysRef.current;
+      const joy = joystickRef.current;
       let dx = 0;
       let dy = 0;
 
@@ -241,9 +297,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       if (keys['a'] || keys['arrowleft']) dx -= 1;
       if (keys['d'] || keys['arrowright']) dx += 1;
 
+      // Add analog touch joystick input
+      if (joy.isMoving) {
+        dx += joy.x;
+        dy += joy.y;
+      }
+
       if (dx !== 0 && dy !== 0) {
-        dx *= 0.7071;
-        dy *= 0.7071;
+        const mag = Math.hypot(dx, dy);
+        if (mag > 1) {
+          dx /= mag;
+          dy /= mag;
+        }
       }
 
       let baseSpeed = 180;
@@ -281,6 +346,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
         isMoving,
         stats.isZooming ? 'zoomies' : isMoving ? 'walking' : 'idle'
       );
+
+      // Broadcast position to other tabs of the same account
+      if (isMoving || Math.abs(playerPosRef.current.vx) > 0.1 || Math.abs(playerPosRef.current.vy) > 0.1) {
+        broadcastCrossTabPos(
+          Math.round(playerPosRef.current.x),
+          Math.round(playerPosRef.current.y),
+          playerPosRef.current.dir,
+          isMoving,
+          stats.isZooming ? 'zoomies' : isMoving ? 'walking' : 'idle'
+        );
+      }
 
       // 2. Check Proximity to Interactive Props (in World Space)
       let nearestProp: InteractiveProp | null = null;

@@ -18,8 +18,11 @@ import { ServerChannelModal } from '@/components/hud/ServerChannelModal';
 import { RoomDeletedModal } from '@/components/hud/RoomDeletedModal';
 import { FullscreenCatLoader } from '@/components/loading/FullscreenCatLoader';
 import { WelcomeTitleScreen } from '@/components/welcome/WelcomeTitleScreen';
+import { VirtualJoystick } from '@/components/controls/VirtualJoystick';
+import { MobileActionButton } from '@/components/controls/MobileActionButton';
 import { useCatStore } from '@/store/catStore';
 import { soundManager } from '@/audio/soundManager';
+import { subscribeCrossTabSync } from '@/game/sync/crossTabSync';
 
 export default function Home() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -51,6 +54,28 @@ export default function Home() {
       }
     } catch {}
   }, [setCurrentRoom]);
+
+  // Real-time comprehensive cross-tab synchronization
+  useEffect(() => {
+    const unsubscribe = subscribeCrossTabSync((msg) => {
+      if (msg.type === 'customization-sync' && msg.customization) {
+        updateCustomization(msg.customization);
+      } else if (msg.type === 'chat-sync' && msg.roomId && msg.message) {
+        useCatStore.getState().syncCrossTabChatMessage(msg.roomId, msg.message);
+      } else if (msg.type === 'room-sync' && msg.room) {
+        useCatStore.getState().syncCrossTabRoom(msg.room);
+      } else if (msg.type === 'stats-sync') {
+        useCatStore.getState().syncCrossTabStats(msg.stats, msg.fishCoins, msg.unlockedItems);
+      } else if (msg.type === 'friend-req-sync' && msg.request) {
+        useCatStore.getState().syncCrossTabFriendRequest(msg.request);
+      } else if (msg.type === 'friend-accepted-sync' && msg.friend) {
+        useCatStore.getState().syncCrossTabFriendAccepted(msg.friend);
+      } else if (msg.type === 'dm-sync' && msg.friendId && msg.message) {
+        useCatStore.getState().syncCrossTabDM(msg.friendId, msg.message);
+      }
+    });
+    return () => unsubscribe();
+  }, [updateCustomization]);
 
   // Check existing session on mount smoothly
   useEffect(() => {
@@ -208,27 +233,33 @@ export default function Home() {
 
       {/* 4. FLOATING BOTTOM HUD */}
       {isInGame && (
-        <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 z-30 pointer-events-none flex items-end justify-between gap-4 max-w-[96vw] mx-auto animate-in fade-in">
-          {/* Left: Chat & Emotes */}
-          <div className="pointer-events-auto">
-            <ChatAndEmoteBox />
-          </div>
+        <>
+          <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 z-30 pointer-events-none flex items-end justify-between gap-4 max-w-[96vw] mx-auto animate-in fade-in pb-[env(safe-area-inset-bottom,1rem)]">
+            {/* Left: Chat & Emotes */}
+            <div className="pointer-events-auto">
+              <ChatAndEmoteBox />
+            </div>
 
-          {/* Center: Quick Care Dock */}
-          <div className="flex-1 flex justify-center pb-1 pointer-events-auto">
-            <QuickCareDock />
-          </div>
+            {/* Center: Quick Care Dock */}
+            <div className="flex-1 flex justify-center pb-1 pointer-events-auto">
+              <QuickCareDock />
+            </div>
 
-          {/* Right: Tip Badge */}
-          <div className="hidden lg:flex flex-col items-end gap-1 pointer-events-auto">
-            <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl border-2 border-[#ebd9c8] shadow-lg flex flex-col items-end">
-              <span className="font-fredoka font-bold text-xs text-[#523e32]">💡 ทริคทาสแมว</span>
-              <span className="font-itim text-[11px] text-[#8d7568]">
-                กดสลับห้องที่แถบด้านบน เพื่อเล่นในสวนซากุระ หรือสร้างห้องส่วนตัวใส่รหัส PIN 🌸
-              </span>
+            {/* Right: Tip Badge */}
+            <div className="hidden lg:flex flex-col items-end gap-1 pointer-events-auto">
+              <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl border-2 border-[#ebd9c8] shadow-lg flex flex-col items-end">
+                <span className="font-fredoka font-bold text-xs text-[#523e32]">💡 ทริคทาสแมว</span>
+                <span className="font-itim text-[11px] text-[#8d7568]">
+                  กดสลับห้องที่แถบด้านบน เพื่อเล่นในสวนซากุระ หรือสร้างห้องส่วนตัวใส่รหัส PIN 🌸
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+
+          {/* Touch-Screen Virtual Controls for Mobile & iPad */}
+          <VirtualJoystick />
+          <MobileActionButton />
+        </>
       )}
 
       {/* 5. MODALS & OVERLAYS */}

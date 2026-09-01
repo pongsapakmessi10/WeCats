@@ -92,9 +92,30 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
 
       // 1. Movement Sync
       if (type === 'cat-move') {
+        const incomingName = packet.customization?.name;
+        if (incomingName && incomingName === myCatRef.current.name) {
+          if (typeof window !== 'undefined' && typeof packet.x === 'number' && typeof packet.y === 'number') {
+            window.dispatchEvent(
+              new CustomEvent('wecats-self-pos-sync', {
+                detail: {
+                  x: packet.x,
+                  y: packet.y,
+                  direction: packet.direction || 'down',
+                  isMoving: packet.isMoving,
+                  behavior: packet.behavior || 'idle',
+                },
+              })
+            );
+          }
+          return;
+        }
+
         setOnlineCats((prev: OnlineCat[]) => {
-          const existing = prev.find((c: OnlineCat) => c.id === senderPeerId);
-          if (!existing) {
+          const matchIndex = prev.findIndex(
+            (c: OnlineCat) => c.id === senderPeerId || (incomingName && c.customization.name === incomingName)
+          );
+
+          if (matchIndex === -1) {
             return [
               ...prev,
               {
@@ -111,20 +132,19 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
             ];
           }
 
-          return prev.map((c: OnlineCat) =>
-            c.id === senderPeerId
-              ? {
-                  ...c,
-                  customization: packet.customization || c.customization,
-                  x: packet.x,
-                  y: packet.y,
-                  direction: packet.direction,
-                  behavior: packet.behavior,
-                  isMoving: packet.isMoving,
-                  lastUpdated: Date.now(),
-                }
-              : c
-          );
+          const updated = [...prev];
+          updated[matchIndex] = {
+            ...updated[matchIndex],
+            id: senderPeerId,
+            customization: packet.customization || updated[matchIndex].customization,
+            x: packet.x,
+            y: packet.y,
+            direction: packet.direction,
+            behavior: packet.behavior,
+            isMoving: packet.isMoving,
+            lastUpdated: Date.now(),
+          };
+          return updated;
         });
       }
 
@@ -134,6 +154,8 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
         const posY = typeof packet.y === 'number' ? packet.y : 480;
         const posDir = packet.direction || 'down';
         const incomingCatName = packet.customization?.name;
+
+        if (incomingCatName && incomingCatName === myCatRef.current.name) return;
 
         setOnlineCats((prev: OnlineCat[]) => {
           // Check if peer already exists by ID OR by same cat name (seamless reconnect)
@@ -318,9 +340,14 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
         const initY = typeof initialPos?.y === 'number' ? initialPos.y : 480;
         const initDir = initialPos?.direction || 'down';
 
+        // Prevent adding clone of own cat
+        const incomingName = initialCustomization?.name;
+        if (incomingName && incomingName === myCatRef.current.name) {
+          return;
+        }
+
         // Add or update online cats seamlessly
         setOnlineCats((prev: OnlineCat[]) => {
-          const incomingName = initialCustomization?.name;
           const matchIndex = prev.findIndex(
             (c: OnlineCat) => c.id === targetPeerId || (incomingName && c.customization.name === incomingName)
           );
@@ -400,13 +427,14 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
     let isCancelled = false;
     let heartbeatTimer: NodeJS.Timeout;
 
-    // Restore cached online cats on refresh so there is 0ms pop-in
+    // Restore cached online cats on refresh so there is 0ms pop-in (excluding self)
     try {
       const cached = localStorage.getItem('wecats_cached_online_cats');
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setOnlineCats(parsed);
+          const myName = myCatRef.current.name;
+          setOnlineCats(parsed.filter((c: OnlineCat) => c.customization?.name !== myName));
         }
       }
     } catch {}

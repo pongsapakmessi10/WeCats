@@ -1,9 +1,17 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
   title: 'WeCats by Pongsapak',
   description: 'เกมเลี้ยงแมว 2D สไตล์ Pastel สุดน่ารัก ปรับแต่งแมวได้อิสระ พร้อมระบบสถิติสมจริง และเดินเล่นออนไลน์กับเพื่อนๆ ใน Cat Plaza',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({

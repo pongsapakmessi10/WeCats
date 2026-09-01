@@ -60,39 +60,41 @@ export const BiologyStatsBar: React.FC<BiologyStatsBarProps> = ({ isAuthLoading 
   }
 
   return (
-    <div className="w-full max-w-4xl bg-white/90 backdrop-blur-md px-6 py-3.5 rounded-3xl border-3 border-[#ebd9c8] shadow-lg flex flex-wrap items-center justify-between gap-4 pointer-events-auto animate-in fade-in">
+    <div className="w-full max-w-4xl bg-white/90 backdrop-blur-md px-3 sm:px-6 py-2 sm:py-3.5 rounded-2xl sm:rounded-3xl border-3 border-[#ebd9c8] shadow-lg flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-4 pointer-events-auto animate-in fade-in">
       
       {/* 1. Profile & Affection Level */}
-      <div className="flex items-center gap-3">
-        <div className="relative">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#ffcad4] to-[#ffe5a3] border-2 border-[#523e32] flex items-center justify-center shadow-inner">
-            <CatPawIcon size={24} color="#523e32" />
-          </div>
-          <span className="absolute -bottom-1.5 -right-1.5 bg-[#ffe5a3] border border-[#523e32] text-[#523e32] text-[10px] font-fredoka font-bold px-1.5 py-0.2 rounded-full">
-            Lv.{stats.affectionLevel}
-          </span>
-        </div>
-        <div>
-          <div className="flex items-center gap-1.5">
-            <span className="font-fredoka font-bold text-sm text-[#523e32]">{myCat.name}</span>
-            <span className={`badge-pill text-[10px] font-fredoka py-0.5 ${chonkInfo.color}`}>
-              {stats.weightKg} kg • {chonkInfo.text}
+      <div className="flex items-center justify-between w-full sm:w-auto gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="relative">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-[#ffcad4] to-[#ffe5a3] border-2 border-[#523e32] flex items-center justify-center shadow-inner">
+              <CatPawIcon size={20} color="#523e32" />
+            </div>
+            <span className="absolute -bottom-1 -right-1 bg-[#ffe5a3] border border-[#523e32] text-[#523e32] text-[9px] sm:text-[10px] font-fredoka font-bold px-1.5 py-0.2 rounded-full">
+              Lv.{stats.affectionLevel}
             </span>
           </div>
-          <div className="flex items-center gap-1 mt-0.5">
-            <div className="w-24 h-2 bg-[#ebd9c8] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-[#ffcad4] to-[#ff758f] transition-all duration-300"
-                style={{ width: `${(stats.affectionExp % 100)}%` }}
-              />
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-fredoka font-bold text-xs sm:text-sm text-[#523e32]">{myCat.name}</span>
+              <span className={`badge-pill text-[9px] sm:text-[10px] font-fredoka py-0.5 ${chonkInfo.color}`}>
+                {stats.weightKg} kg • {chonkInfo.text}
+              </span>
             </div>
-            <span className="font-itim text-[11px] text-[#8d7568]">Bonding Exp</span>
+            <div className="flex items-center gap-1 mt-0.5">
+              <div className="w-20 sm:w-24 h-1.5 sm:h-2 bg-[#ebd9c8] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-[#ffcad4] to-[#ff758f] transition-all duration-300"
+                  style={{ width: `${(stats.affectionExp % 100)}%` }}
+                />
+              </div>
+              <span className="font-itim text-[10px] sm:text-[11px] text-[#8d7568]">Bonding Exp</span>
+            </div>
           </div>
         </div>
       </div>
 
       {/* 2. Realistic Biology Stat Gauges */}
-      <div className="flex items-center gap-4 sm:gap-6 flex-1 justify-end flex-wrap">
+      <div className="flex items-center gap-3 sm:gap-6 w-full sm:w-auto flex-1 justify-start sm:justify-end flex-nowrap overflow-x-auto no-scrollbar py-0.5">
         
         {/* Hunger */}
         <div className="flex items-center gap-2" title="ความอิ่ม (Hunger)">
