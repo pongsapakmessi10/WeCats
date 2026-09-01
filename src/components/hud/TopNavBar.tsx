@@ -18,6 +18,8 @@ import {
   Bell,
   Sparkles,
   Menu,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import {
   CatPawIcon,
@@ -45,7 +47,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   onLogout,
   isAuthLoading = false,
 }) => {
-  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const isMobileDrawerOpen = useCatStore((state) => state.isMobileDrawerOpen);
+  const setIsMobileDrawerOpen = useCatStore((state) => state.setIsMobileDrawerOpen);
+  const cameraZoomMode = useCatStore((state) => state.cameraZoomMode);
+  const toggleCameraZoom = useCatStore((state) => state.toggleCameraZoom);
   const fishCoins = useCatStore((state) => state.fishCoins);
   const setCustomizerOpen = useCatStore((state) => state.setCustomizerOpen);
   const setProfileOpen = useCatStore((state) => state.setProfileOpen);
@@ -56,6 +61,11 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   const pendingFriendRequests = useCatStore((state) => state.pendingFriendRequests);
   const isSoundEnabled = useCatStore((state) => state.isSoundEnabled);
   const toggleSound = useCatStore((state) => state.toggleSound);
+  const currentRoom = useCatStore((state) => state.currentRoom);
+  const isCondo = currentRoom.theme === 'condo' || currentRoom.type === 'condo';
+  const setIsCondoCustomizerOpen = useCatStore((state) => state.setIsCondoCustomizerOpen);
+  const enterMyCondo = useCatStore((state) => state.enterMyCondo);
+  const exitCondoToPlaza = useCatStore((state) => state.exitCondoToPlaza);
   const timeOfDay = useCatStore((state) => state.timeOfDay);
   const notificationText = useCatStore((state) => state.notificationText);
 
@@ -126,7 +136,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           </div>
           <div className="flex flex-col justify-center">
             <div className="flex items-center gap-1 sm:gap-2 flex-nowrap">
-              <h1 className="font-fredoka font-bold text-sm sm:text-lg text-[#523e32] tracking-tight whitespace-nowrap hidden min-[360px]:block">
+              <h1 className="font-fredoka font-bold text-sm sm:text-lg text-[#523e32] tracking-tight whitespace-nowrap hidden sm:block">
                 WeCats
               </h1>
               
@@ -140,7 +150,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                 title="คลิกเพื่อสลับห้อง / สร้างห้องส่วนตัว"
               >
                 <Radio size={11} className="shrink-0" />
-                <span className="whitespace-nowrap font-bold max-w-[80px] sm:max-w-none truncate">
+                <span className="whitespace-nowrap font-bold max-w-[72px] sm:max-w-none truncate">
                   {useCatStore((state) => state.currentRoom.name.split(':')[0] || state.currentRoom.name)}
                 </span>
               </button>
@@ -176,18 +186,51 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-nowrap">
           
           {/* MOBILE ACTION BAR (Shown on screens < lg) */}
-          <div className="flex lg:hidden items-center gap-1 shrink-0">
-            {/* Quick Studio Button */}
+          <div className="flex lg:hidden items-center gap-1.5 shrink-0">
+            {/* Quick Camera Zoom Switcher (Compact Icon on Mobile) */}
+            <button
+              onClick={() => {
+                soundManager.playPop();
+                toggleCameraZoom();
+              }}
+              className={`btn-jelly p-1.5 rounded-full border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32] shadow-sm flex items-center justify-center cursor-pointer transition-all ${
+                cameraZoomMode === 'close' ? 'bg-[#ffe5a3] hover:bg-[#ffd166]' : 'bg-[#e8f4fc] hover:bg-[#bde0fe]'
+              }`}
+              title={cameraZoomMode === 'close' ? 'แตะเพื่อซูมออก (มุมมองกว้าง 🗺️)' : 'แตะเพื่อซูมเข้า (มุมมองใกล้ชิด 🔍)'}
+            >
+              {cameraZoomMode === 'close' ? (
+                <ZoomOut size={15} className="shrink-0 stroke-[2.5]" />
+              ) : (
+                <ZoomIn size={15} className="shrink-0 stroke-[2.5]" />
+              )}
+            </button>
+
+            {/* Condo Quick Decorate Button on Mobile (Only in Condo) */}
+            {isCondo && (
+              <button
+                onClick={() => {
+                  soundManager.playSparkle();
+                  setIsCondoCustomizerOpen(true);
+                }}
+                className="btn-jelly px-2.5 py-1 rounded-full bg-gradient-to-r from-[#ffd166] to-[#ffcad4] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32] shadow-sm flex items-center justify-center gap-1"
+                title="ตกแต่งคอนโดแมว 🎨"
+              >
+                <Palette size={14} className="shrink-0" />
+                <span className="text-[11px]">แต่งห้อง 🎨</span>
+              </button>
+            )}
+
+            {/* Quick Studio Button (Compact Icon Button on Mobile) */}
             <button
               onClick={() => {
                 soundManager.playSparkle();
                 setCustomizerOpen(true);
               }}
-              className="btn-jelly flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#ffcad4] border-2 border-[#523e32] text-[11px] font-fredoka font-bold text-[#523e32] shadow-sm"
+              className="btn-jelly p-1.5 sm:px-2.5 sm:py-1 rounded-full bg-[#ffcad4] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32] shadow-sm flex items-center justify-center gap-1"
               title="ห้องแต่งตัว Cat Studio"
             >
-              <Palette size={13} className="shrink-0" />
-              <span>แต่งตัว</span>
+              <Palette size={15} className="shrink-0" />
+              <span className="hidden min-[400px]:inline text-[11px]">แต่งตัว</span>
             </button>
 
             {/* Mobile Drawer Menu Hamburger Button */}
@@ -258,6 +301,47 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
               </button>
             )}
 
+            {/* Condo Home / Exit Button */}
+            {isCondo ? (
+              <>
+                <button
+                  onClick={() => {
+                    soundManager.playSparkle();
+                    setIsCondoCustomizerOpen(true);
+                  }}
+                  className="btn-jelly flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-[#ffd166] to-[#ffcad4] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32] shrink-0 whitespace-nowrap shadow-md"
+                  title="คลิกเพื่อตกแต่งห้องคอนโดแมว 🎨 (วอลเปเปอร์ พื้น โซฟา พรม)"
+                >
+                  <Palette size={15} />
+                  <span className="whitespace-nowrap font-extrabold">ตกแต่งห้อง 🎨</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    soundManager.playPop();
+                    exitCondoToPlaza();
+                  }}
+                  className="btn-jelly flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#e8f4fc] hover:bg-[#bde0fe] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32] shrink-0 whitespace-nowrap shadow-sm"
+                  title="กลับสู่ลาน Plaza #1 🌸"
+                >
+                  <span>🌸</span>
+                  <span className="hidden md:inline whitespace-nowrap">สู่ Plaza</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  soundManager.playPop();
+                  enterMyCondo();
+                }}
+                className="btn-jelly flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#ffd166] hover:bg-[#ffc32b] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32] shrink-0 whitespace-nowrap shadow-sm"
+                title="เข้าสู่ห้องคอนโดแมวส่วนตัว 🏡"
+              >
+                <span className="text-sm">🏡</span>
+                <span className="hidden md:inline whitespace-nowrap">บ้านของฉัน</span>
+              </button>
+            )}
+
             {/* Boutique Shop Button */}
             <button
               onClick={() => {
@@ -299,6 +383,30 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                 <span className="px-1.5 py-0.5 rounded-full bg-[#ff4d6d] text-white text-[10px] font-fredoka font-bold animate-bounce shadow-md flex items-center justify-center -mr-1">
                   {pendingFriendRequests.length}
                 </span>
+              )}
+            </button>
+
+            {/* Camera Zoom Toggle */}
+            <button
+              onClick={() => {
+                soundManager.playPop();
+                toggleCameraZoom();
+              }}
+              className={`btn-jelly flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32] shrink-0 whitespace-nowrap shadow-sm cursor-pointer ${
+                cameraZoomMode === 'close' ? 'bg-[#ffe5a3]' : 'bg-[#e8f4fc]'
+              }`}
+              title={cameraZoomMode === 'close' ? 'แตะเพื่อซูมออก (มุมมองกว้าง 🗺️)' : 'แตะเพื่อซูมเข้า (มุมมองใกล้ชิด 🔍)'}
+            >
+              {cameraZoomMode === 'close' ? (
+                <>
+                  <ZoomOut size={15} className="shrink-0 stroke-[2.5]" />
+                  <span className="font-itim">ซูมออก</span>
+                </>
+              ) : (
+                <>
+                  <ZoomIn size={15} className="shrink-0 stroke-[2.5]" />
+                  <span className="font-itim">ซูมเข้า</span>
+                </>
               )}
             </button>
 

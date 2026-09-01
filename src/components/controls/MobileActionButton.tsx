@@ -11,6 +11,7 @@ export const MobileActionButton: React.FC = () => {
   const interactWithProp = useCatStore((state) => state.interactWithProp);
   const sniffCat = useCatStore((state) => state.sniffCat);
   const sendEmote = useCatStore((state) => state.sendEmote);
+  const isMobileDrawerOpen = useCatStore((state) => state.isMobileDrawerOpen);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   useEffect(() => {
@@ -48,7 +49,11 @@ export const MobileActionButton: React.FC = () => {
   return (
     <div
       className={`fixed right-4 bottom-6 z-40 select-none pointer-events-auto transition-all duration-300 ${
-        isTouchDevice ? 'opacity-100' : 'opacity-90 lg:hidden'
+        isMobileDrawerOpen
+          ? 'opacity-0 pointer-events-none scale-90'
+          : isTouchDevice
+          ? 'opacity-100'
+          : 'opacity-90 lg:hidden'
       }`}
     >
       <button

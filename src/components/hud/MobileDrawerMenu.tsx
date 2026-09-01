@@ -80,12 +80,12 @@ export const MobileDrawerMenu: React.FC<MobileDrawerMenuProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm animate-in fade-in">
+    <div className="fixed inset-0 z-[9999] flex justify-end bg-black/50 backdrop-blur-sm animate-in fade-in pointer-events-auto">
       {/* Backdrop Click */}
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* Drawer Card */}
-      <div className="relative w-72 max-w-[85vw] h-full bg-[#fff8eb] border-l-3 border-[#523e32] shadow-2xl p-4 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200">
+      <div className="relative w-72 max-w-[85vw] h-full bg-[#fff8eb] border-l-3 border-[#523e32] shadow-2xl p-4 flex flex-col justify-between overflow-y-auto pb-8 z-10 animate-in slide-in-from-right duration-200">
         
         {/* Top Header */}
         <div className="space-y-4">
@@ -119,6 +119,56 @@ export const MobileDrawerMenu: React.FC<MobileDrawerMenuProps> = ({
 
           {/* Nav Items List */}
           <div className="space-y-2">
+            {/* 0. Condo / Home Button */}
+            {useCatStore.getState().currentRoom.type === 'condo' ? (
+              <>
+                <button
+                  onClick={() => {
+                    soundManager.playSparkle();
+                    onClose();
+                    useCatStore.getState().setIsCondoCustomizerOpen(true);
+                  }}
+                  className="w-full btn-jelly flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-[#ffcad4] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32]"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Palette size={18} />
+                    <span>ตกแต่งคอนโดแมว 🎨</span>
+                  </div>
+                  <span className="text-[10px] text-[#8d7568] font-itim">เปลี่ยนลาย 🛋️</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    soundManager.playPop();
+                    onClose();
+                    useCatStore.getState().exitCondoToPlaza();
+                  }}
+                  className="w-full btn-jelly flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-[#e8f4fc] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32]"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">🌸</span>
+                    <span>ออกสู่ลาน Plaza #1</span>
+                  </div>
+                  <span className="text-[10px] text-[#8d7568] font-itim">วาร์ป 🚪</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  soundManager.playPop();
+                  onClose();
+                  useCatStore.getState().enterMyCondo();
+                }}
+                className="w-full btn-jelly flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-[#ffd166] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32] shadow-sm"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base">🏡</span>
+                  <span>บ้านคอนโดส่วนตัว</span>
+                </div>
+                <span className="text-[10px] text-[#523e32] font-itim bg-white/80 px-2 py-0.5 rounded-full">เข้าบ้าน 🐾</span>
+              </button>
+            )}
+
             {/* 1. Shop */}
             <button
               onClick={() => {

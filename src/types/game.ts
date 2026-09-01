@@ -88,7 +88,7 @@ export interface OnlineCat {
 
 export interface InteractiveProp {
   id: string;
-  type: 'water_fountain' | 'food_bowl' | 'scratch_post' | 'cat_tree' | 'cardboard_box' | 'sun_patch' | 'laser_pointer' | 'fish_pond' | 'catnip_patch';
+  type: 'water_fountain' | 'food_bowl' | 'scratch_post' | 'cat_tree' | 'cardboard_box' | 'sun_patch' | 'laser_pointer' | 'fish_pond' | 'catnip_patch' | 'tea_table' | 'windmill' | 'campfire' | 'gramophone' | 'telescope' | 'tent';
   name: string;
   prompt: string;
   x: number;
@@ -164,6 +164,7 @@ export interface FriendData {
   catName: string;
   breed: BreedType;
   customization?: CatCustomization;
+  condoConfig?: CondoCustomization;
   isOnline: boolean;
   friendshipPoints: number;
   lastGiftReceived?: number;
@@ -187,12 +188,32 @@ export interface CatSlot {
   stats: CatStats;
 }
 
+export interface CondoCustomization {
+  wallpaper: 'cozy_cream' | 'sakura_pink' | 'midnight_star' | 'wooden_cabin';
+  flooring: 'warm_parquet' | 'white_wood' | 'tatami' | 'pastel_tile';
+  rugStyle: 'paw_pink' | 'cream_circle' | 'boho_pattern' | 'fluffy_cloud';
+  catTreeStyle: 'bamboo_castle' | 'modern_nordic' | 'pink_princess';
+  sofaColor: 'velvet_pink' | 'emerald_green' | 'creamy_latte' | 'denim_blue';
+  windowScenery: 'sunny_garden' | 'sakura_breeze' | 'night_stars';
+}
+
+export const DEFAULT_CONDO: CondoCustomization = {
+  wallpaper: 'cozy_cream',
+  flooring: 'warm_parquet',
+  rugStyle: 'paw_pink',
+  catTreeStyle: 'bamboo_castle',
+  sofaColor: 'velvet_pink',
+  windowScenery: 'sunny_garden',
+};
+
 export interface RoomData {
   id: string;
   name: string;
-  type: 'public' | 'private';
-  theme: 'sakura' | 'sunshine' | 'moonlight';
+  type: 'public' | 'private' | 'condo';
+  theme: 'sakura' | 'sunshine' | 'moonlight' | 'condo';
   maxCapacity: number;
   currentCount?: number;
+  ownerName?: string;
+  condoConfig?: CondoCustomization;
 }
 

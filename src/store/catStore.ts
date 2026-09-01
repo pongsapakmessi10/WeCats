@@ -15,6 +15,8 @@ import {
   Achievement,
   CatSlot,
   RoomData,
+  CondoCustomization,
+  DEFAULT_CONDO,
 } from '@/types/game';
 import {
   broadcastLiveFriendRequest,
@@ -348,6 +350,18 @@ interface CatStoreState {
   setFriendsOpen: (open: boolean) => void;
   setDirectChatOpen: (open: boolean) => void;
   setActiveDirectChatFriend: (friend: FriendData | null) => void;
+  isMobileDrawerOpen: boolean;
+  setIsMobileDrawerOpen: (open: boolean) => void;
+  isCondoCustomizerOpen: boolean;
+  setIsCondoCustomizerOpen: (open: boolean) => void;
+  myCondo: CondoCustomization;
+  updateCondoCustomization: (updates: Partial<CondoCustomization>) => void;
+  enterMyCondo: () => void;
+  visitFriendCondo: (friendCatName: string, config?: CondoCustomization) => void;
+  exitCondoToPlaza: () => void;
+  cameraZoomMode: 'close' | 'wide';
+  toggleCameraZoom: () => void;
+  setCameraZoomMode: (mode: 'close' | 'wide') => void;
   toggleSound: () => void;
 
   // Economy Actions
@@ -404,6 +418,21 @@ interface CatStoreState {
   setActiveNearbyProp: (prop: InteractiveProp | null) => void;
   setNotification: (text: string) => void;
   tickBiology: () => void;
+}
+
+function loadInitialCondo(): CondoCustomization {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('wecats_my_condo');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return { ...DEFAULT_CONDO, ...parsed };
+        }
+      }
+    } catch {}
+  }
+  return DEFAULT_CONDO;
 }
 
 export const useCatStore = create<CatStoreState>((set, get) => ({
@@ -472,6 +501,10 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   activeNearbyProp: null,
   notificationText: 'ยินดีต้อนรับสู่ WeCats Plaza! กด [E] เพื่อโต้ตอบกับสิ่งของ 🐾',
   timeOfDay: 'morning',
+  isMobileDrawerOpen: false,
+  isCondoCustomizerOpen: false,
+  myCondo: loadInitialCondo(),
+  cameraZoomMode: (typeof window !== 'undefined' && (localStorage.getItem('wecats_camera_zoom') as 'close' | 'wide')) || 'close',
   currentRoom: {
     id: 'public-sakura',
     name: 'Plaza #1: สวนซากุระ',
@@ -609,6 +642,106 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   setFriendsOpen: (open) => set({ isFriendsOpen: open }),
   setDirectChatOpen: (open) => set({ isDirectChatOpen: open }),
   setActiveDirectChatFriend: (friend) => set({ activeDirectChatFriend: friend, isDirectChatOpen: !!friend }),
+  setIsMobileDrawerOpen: (open) => set({ isMobileDrawerOpen: open }),
+  setIsCondoCustomizerOpen: (open) => set({ isCondoCustomizerOpen: open }),
+  updateCondoCustomization: (updates) =>
+    set((state) => {
+      const updated = { ...state.myCondo, ...updates };
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('wecats_my_condo', JSON.stringify(updated));
+        } catch {}
+      }
+      // If currently in self condo, update currentRoom config as well
+      const updatedRoom =
+        state.currentRoom.type === 'condo' && state.currentRoom.ownerName === state.myCat.name
+          ? { ...state.currentRoom, condoConfig: updated }
+          : state.currentRoom;
+
+      return {
+        myCondo: updated,
+        currentRoom: updatedRoom,
+      };
+    }),
+  enterMyCondo: () => {
+    const { myCat, myCondo, setCurrentRoom, setNotification } = get();
+    const condoRoom: RoomData = {
+      id: `condo-${myCat.name.toLowerCase().replace(/\s+/g, '_')}`,
+      name: `คอนโดของ ${myCat.name} 🏡`,
+      type: 'condo',
+      theme: 'condo',
+      maxCapacity: 10,
+      ownerName: myCat.name,
+      condoConfig: myCondo,
+    };
+    setCurrentRoom(condoRoom);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('wecats-self-pos-sync', {
+          detail: { x: 800, y: 580, direction: 'down', isMoving: false },
+        })
+      );
+    }
+    setNotification(`ยินดีต้อนรับกลับบ้าน "${myCat.name}"! 🏡🛋️✨`);
+  },
+  visitFriendCondo: (friendCatName, config) => {
+    const { setCurrentRoom, setNotification } = get();
+    const condoRoom: RoomData = {
+      id: `condo-${friendCatName.toLowerCase().replace(/\s+/g, '_')}`,
+      name: `บ้านของ ${friendCatName} 🏡`,
+      type: 'condo',
+      theme: 'condo',
+      maxCapacity: 10,
+      ownerName: friendCatName,
+      condoConfig: config || DEFAULT_CONDO,
+    };
+    setCurrentRoom(condoRoom);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('wecats-self-pos-sync', {
+          detail: { x: 800, y: 800, direction: 'up', isMoving: false },
+        })
+      );
+    }
+    setNotification(`วาร์ปมาถึงบ้านของ "${friendCatName}" แล้ว! 🏡🎉`);
+  },
+  exitCondoToPlaza: () => {
+    const { setCurrentRoom, setNotification } = get();
+    const defaultSakura: RoomData = {
+      id: 'public-sakura',
+      name: 'Plaza #1: สวนซากุระ',
+      type: 'public',
+      theme: 'sakura',
+      maxCapacity: 20,
+    };
+    setCurrentRoom(defaultSakura);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('wecats-self-pos-sync', {
+          detail: { x: 1100, y: 750, direction: 'down', isMoving: false },
+        })
+      );
+    }
+    setNotification('ก้าวออกจากบ้านสู่สวนซากุระ Plaza #1 🌸');
+  },
+  toggleCameraZoom: () =>
+    set((state) => {
+      const nextMode = state.cameraZoomMode === 'close' ? 'wide' : 'close';
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('wecats_camera_zoom', nextMode);
+        } catch {}
+      }
+      return { cameraZoomMode: nextMode };
+    }),
+  setCameraZoomMode: (mode) => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('wecats_camera_zoom', mode);
+      } catch {}
+    }
+    set({ cameraZoomMode: mode });
+  },
   toggleSound: () => set((state) => ({ isSoundEnabled: !state.isSoundEnabled })),
 
   // Economy Actions
@@ -1076,6 +1209,85 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       addFishCoins(10);
       addDiaryEntry('นอนอาบแดดอุ่นสบาย ☀️', 'ฟื้นฟูพลังงาน Energy +35%, ได้รับ +10 🐟', '☀️', 10, 'care');
       setNotification('นอนอาบแดดอุ่นสบาย~ ☀️ +10 🐟');
+    } else if (prop.actionType === 'tea') {
+      set((state) => ({
+        stats: {
+          ...state.stats,
+          hunger: Math.min(100, state.stats.hunger + 30),
+          happiness: Math.min(100, state.stats.happiness + 25),
+        },
+      }));
+      addFishCoins(12);
+      addDiaryEntry('กินดังโงะและจิบชาเขียวมัทฉะ 🍡', 'อิ่มอร่อยกับขนมดังโงะ 3 สีใต้ต้นซากุระ, ได้รับ +12 🐟', '🍡', 12, 'care');
+      setNotification('กินดังโงะ 3 สีแสนอร่อย! 🍡 +12 🐟');
+    } else if (prop.actionType === 'koi') {
+      set((state) => ({
+        stats: {
+          ...state.stats,
+          happiness: Math.min(100, state.stats.happiness + 20),
+          affectionExp: state.stats.affectionExp + 25,
+        },
+      }));
+      addFishCoins(12);
+      addDiaryEntry('ให้อาหารปลาคาร์ปริมสะพาน 🐟', 'ชมปลาคาร์ปญี่ปุ่นว่ายน้ำอย่างเพลิดเพลิน, ได้รับ +12 🐟', '🐟', 12, 'care');
+      setNotification('ชมปลาคาร์ปว่ายน้ำดุ๊กดิ๊ก! 🐟 +12 🐟');
+    } else if (prop.actionType === 'windmill') {
+      set((state) => ({
+        stats: {
+          ...state.stats,
+          zoomiesEnergy: Math.min(100, state.stats.zoomiesEnergy + 30),
+          happiness: Math.min(100, state.stats.happiness + 15),
+        },
+      }));
+      addFishCoins(10);
+      addDiaryEntry('ยืนรับลมชมกังหันลมหมุน 🌾', 'สายลมสดชื่นพัดผ่านทุ่งหญ้าแดดอุ่น, ได้รับ +10 🐟', '🌾', 10, 'care');
+      setNotification('รับลมเย็นสบายใต้กังหันลม! 🌾 +10 🐟');
+    } else if (prop.actionType === 'tent') {
+      set((state) => ({
+        stats: {
+          ...state.stats,
+          energy: Math.min(100, state.stats.energy + 40),
+          happiness: Math.min(100, state.stats.happiness + 20),
+        },
+      }));
+      addFishCoins(15);
+      addDiaryEntry('นอนพักในเต็นท์กระโจม ⛺', 'นอนแคมป์ปิ้งบนกองฟางนุ่มๆ อบอุ่นสบาย, ได้รับ +15 🐟', '⛺', 15, 'care');
+      setNotification('นอนพักผ่อนในเต็นท์แคมป์ปิ้ง! ⛺ +15 🐟');
+    } else if (prop.actionType === 'campfire') {
+      set((state) => ({
+        stats: {
+          ...state.stats,
+          happiness: Math.min(100, state.stats.happiness + 25),
+          affectionExp: state.stats.affectionExp + 20,
+        },
+      }));
+      addFishCoins(12);
+      addDiaryEntry('ผิงไฟอุ่นๆ ข้างกองฟืน 🔥', 'ฟังเสียงฟืนเปาะแปะยามค่ำคืนอย่างอบอุ่นใจ, ได้รับ +12 🐟', '🔥', 12, 'care');
+      setNotification('ผิงไฟอุ่นสบายใต้แสงดาว! 🔥 +12 🐟');
+    } else if (prop.actionType === 'gramophone') {
+      set((state) => ({
+        stats: {
+          ...state.stats,
+          happiness: 100,
+          affectionExp: state.stats.affectionExp + 30,
+        },
+      }));
+      addFishCoins(15);
+      addDiaryEntry('ฟังเพลง Lofi แผ่นเสียงไวนิล 🎵', 'ท่วงทำนอง Lofi ชวนฝันเคลิบเคลิ้ม, ได้รับ +15 🐟', '🎵', 15, 'care');
+      setNotification('ฟังเพลง Lofi ชวนฝันเคลิบเคลิ้ม~ 🎵 +15 🐟');
+    } else if (prop.actionType === 'telescope') {
+      set((state) => ({
+        stats: {
+          ...state.stats,
+          happiness: 100,
+          affectionExp: state.stats.affectionExp + 35,
+        },
+      }));
+      addFishCoins(15);
+      addDiaryEntry('ส่องกล้องดูดวงดาวและดาวตก 🔭', 'พบกลุ่มดาวแมวเหมียวบนท้องฟ้าราตรี, ได้รับ +15 🐟', '🔭', 15, 'care');
+      setNotification('ส่องกล้องพบดาวตกพาดผ่านฟ้า! 🔭 +15 🐟');
+    } else if (prop.actionType === 'exit_condo') {
+      get().exitCondoToPlaza();
     }
   },
 

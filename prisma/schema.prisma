@@ -55,6 +55,7 @@ model CatProfile {
   friendsJson        String   @default("[]")
   diaryJson          String   @default("[]")
   achievementsJson   String   @default("[]")
+  condoJson          String   @default("{}")
   
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -80,4 +81,8 @@ model ActivePeer {
   catJson      String   @default("{}")
   lastSeen     DateTime @default(now())
   createdAt    DateTime @default(now())
+
+  @@index([roomId, lastSeen])
+  @@index([userId])
+  @@index([username])
 }

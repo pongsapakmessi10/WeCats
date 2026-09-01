@@ -240,18 +240,31 @@ export const FriendListModal: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* 1-to-1 Chat & Send Treat Buttons */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  {/* 1-to-1 Chat, Visit Home & Send Treat Buttons */}
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                    <button
+                      onClick={() => {
+                        soundManager.playSparkle();
+                        setFriendsOpen(false);
+                        useCatStore.getState().visitFriendCondo(friend.catName, friend.condoConfig);
+                      }}
+                      className="btn-jelly px-3 py-1.5 rounded-2xl bg-[#ffd166] hover:bg-[#ffc32b] text-[#523e32] border-2 border-[#523e32] text-xs font-fredoka font-bold flex items-center gap-1 shadow-sm cursor-pointer"
+                      title="วาร์ปไปเยี่ยมคอนโดของเพื่อน 🏡"
+                    >
+                      <span>🏡</span>
+                      <span>เยี่ยมบ้าน</span>
+                    </button>
+
                     <button
                       onClick={() => {
                         soundManager.playPop();
                         setActiveDirectChatFriend(friend);
                       }}
-                      className="btn-jelly px-3.5 py-2 rounded-2xl bg-[#bde0fe] hover:bg-[#a8d4fc] text-[#523e32] border-2 border-[#523e32] text-xs font-fredoka font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      className="btn-jelly px-3 py-1.5 rounded-2xl bg-[#bde0fe] hover:bg-[#a8d4fc] text-[#523e32] border-2 border-[#523e32] text-xs font-fredoka font-bold flex items-center gap-1 shadow-sm cursor-pointer"
                       title="เปิดหน้าต่างแชทส่วนตัว 1-to-1"
                     >
                       <MessageCircle size={14} />
-                      <span>แชทส่วนตัว 1-to-1</span>
+                      <span>แชท DM</span>
                     </button>
 
                     <button
@@ -259,7 +272,7 @@ export const FriendListModal: React.FC = () => {
                         soundManager.playSparkle();
                         sendTreatToFriend(friend.id);
                       }}
-                      className="btn-jelly px-3 py-2 rounded-2xl bg-[#ffe5a3] hover:bg-[#ffd166] text-[#523e32] border-2 border-[#523e32] text-xs font-fredoka font-bold flex items-center gap-1 shadow-sm cursor-pointer"
+                      className="btn-jelly px-2.5 py-1.5 rounded-2xl bg-[#ffe5a3] hover:bg-[#ffd166] text-[#523e32] border-2 border-[#523e32] text-xs font-fredoka font-bold flex items-center gap-1 shadow-sm cursor-pointer"
                       title="ส่งขนมแมวเลีย +15 แต้มมิตรภาพ"
                     >
                       <FishCoinIcon size={13} />

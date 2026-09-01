@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useCatStore } from '@/store/catStore';
 
 export const VirtualJoystick: React.FC = () => {
   const [knobPos, setKnobPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isActive, setIsActive] = useState(false);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const isMobileDrawerOpen = useCatStore((state) => state.isMobileDrawerOpen);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const touchIdRef = useRef<number | null>(null);
@@ -101,8 +103,12 @@ export const VirtualJoystick: React.FC = () => {
   // Only render on touch-capable devices or mobile/tablet viewports
   return (
     <div
-      className={`fixed left-4 bottom-6 z-40 select-none touch-none pointer-events-auto transition-opacity duration-300 ${
-        isTouchDevice ? 'opacity-100' : 'opacity-80 lg:hidden'
+      className={`fixed left-4 bottom-6 z-40 select-none touch-none pointer-events-auto transition-all duration-300 ${
+        isMobileDrawerOpen
+          ? 'opacity-0 pointer-events-none scale-90'
+          : isTouchDevice
+          ? 'opacity-100'
+          : 'opacity-80 lg:hidden'
       }`}
       style={{ touchAction: 'none' }}
     >

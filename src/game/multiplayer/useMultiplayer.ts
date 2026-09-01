@@ -48,7 +48,7 @@ function getCurrentPlayerPos(): { x: number; y: number; direction: 'up' | 'down'
       }
     } catch {}
   }
-  return { x: 700, y: 480, direction: 'down' };
+  return { x: 1100, y: 750, direction: 'down' };
 }
 
 export function useMultiplayer(rawRoomId: string = 'public-sakura') {
@@ -69,19 +69,11 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
   const lastMoveSentRef = useRef<number>(0);
   const wasMovingRef = useRef<boolean>(false);
 
+  // Sync mutable refs
   useEffect(() => {
     myCatRef.current = myCat;
     statsRef.current = stats;
   }, [myCat, stats]);
-
-  // Persist online cats cache to prevent pop-in on refresh
-  useEffect(() => {
-    if (onlineCats.length > 0) {
-      try {
-        localStorage.setItem('wecats_cached_online_cats', JSON.stringify(onlineCats));
-      } catch {}
-    }
-  }, [onlineCats]);
 
   // Handle incoming data packets from a peer
   const handleIncomingPacket = useCallback(
@@ -193,15 +185,27 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
           ];
         });
 
+        // If packet has condoConfig from owner, sync it live for visitors
+        if (packet.condoConfig) {
+          const currentRoom = useCatStore.getState().currentRoom;
+          if (currentRoom.type === 'condo') {
+            useCatStore.setState({
+              currentRoom: { ...currentRoom, condoConfig: packet.condoConfig },
+            });
+          }
+        }
+
         // Reply back with our customization AND our current real coordinates
         if (packet.isGreeting) {
           const conn = connectionsRef.current.get(senderPeerId);
           if (conn && conn.open) {
             const myPos = getCurrentPlayerPos();
+            const currentRoom = useCatStore.getState().currentRoom;
             conn.send({
               type: 'cat-joined',
               customization: myCatRef.current,
               stats: statsRef.current,
+              condoConfig: currentRoom.type === 'condo' ? useCatStore.getState().myCondo : undefined,
               x: myPos.x,
               y: myPos.y,
               direction: myPos.direction,
@@ -389,10 +393,12 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
 
         // Send our cat appearance handshake with our exact position
         const myPos = getCurrentPlayerPos();
+        const curRoom = useCatStore.getState().currentRoom;
         conn.send({
           type: 'cat-joined',
           customization: myCatRef.current,
           stats: statsRef.current,
+          condoConfig: curRoom.type === 'condo' ? useCatStore.getState().myCondo : undefined,
           x: myPos.x,
           y: myPos.y,
           direction: myPos.direction,
@@ -406,17 +412,18 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
 
       conn.on('close', () => {
         connectionsRef.current.delete(targetPeerId);
-        // Smooth 2.5-second grace period before removal so reload doesn't cause blinking
+        // Smooth 4-second grace period before removal so reload/reconnect doesn't cause blinking
         setTimeout(() => {
           if (!connectionsRef.current.has(targetPeerId)) {
             setOnlineCats((prev: OnlineCat[]) => prev.filter((c: OnlineCat) => c.id !== targetPeerId));
           }
-        }, 2500);
+        }, 4000);
       });
 
-      conn.on('error', () => {
+      conn.on('error', (err) => {
+        console.warn(`P2P connection notice for ${targetPeerId}:`, err);
         connectionsRef.current.delete(targetPeerId);
-        setOnlineCats((prev: OnlineCat[]) => prev.filter((c: OnlineCat) => c.id !== targetPeerId));
+        // Do not immediately delete cat on transient socket error; let heartbeat and grace period reconcile
       });
     },
     [handleIncomingPacket, setOnlineCats]
@@ -427,18 +434,7 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
     let isCancelled = false;
     let heartbeatTimer: NodeJS.Timeout;
 
-    // Restore cached online cats on refresh so there is 0ms pop-in (excluding self)
-    try {
-      const cached = localStorage.getItem('wecats_cached_online_cats');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const myName = myCatRef.current.name;
-          setOnlineCats(parsed.filter((c: OnlineCat) => c.customization?.name !== myName));
-        }
-      }
-    } catch {}
-
+    // Reset local peer connections map on room or mount
     connectionsRef.current.clear();
 
     const initWebRTC = async () => {
@@ -448,7 +444,6 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
 
       // Unique peer ID for this tab session
       const generatedPeerId = `wecat_${Math.random().toString(36).substring(2, 10)}`;
-      myPeerIdRef.current = generatedPeerId;
 
       const peer = new Peer(generatedPeerId, {
         config: {
@@ -464,11 +459,11 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
 
       peer.on('open', async (id) => {
         if (isCancelled) return;
+        myPeerIdRef.current = id;
 
-        const myPos = getCurrentPlayerPos();
-
-        // Register in Room Coordinator with our exact current coordinates
+        // 1. Join room via server signaling
         try {
+          const myPos = getCurrentPlayerPos();
           const res = await fetch('/api/p2p/join', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -490,9 +485,45 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
                 y?: number;
                 direction?: 'up' | 'down' | 'left' | 'right';
               }) => {
-                if (p.peerId !== id && !connectionsRef.current.has(p.peerId)) {
-                  const conn = peer.connect(p.peerId, { reliable: true });
-                  setupConnection(conn, p.customization, { x: p.x, y: p.y, direction: p.direction });
+                if (p.peerId !== id) {
+                  // Prevent adding clone of own cat
+                  const incomingName = p.customization?.name;
+                  if (incomingName && incomingName === myCatRef.current.name) {
+                    return;
+                  }
+
+                  // Pre-seed remote cat in local state so there is 0ms pop-in
+                  if (p.customization) {
+                    setOnlineCats((prev: OnlineCat[]) => {
+                      const matchIndex = prev.findIndex(
+                        (c: OnlineCat) => c.id === p.peerId || (incomingName && c.customization.name === incomingName)
+                      );
+                      if (matchIndex === -1) {
+                        return [
+                          ...prev,
+                          {
+                            id: p.peerId,
+                            customization: p.customization || FALLBACK_DEFAULT_CAT,
+                            stats: statsRef.current,
+                            x: typeof p.x === 'number' ? p.x : 1100,
+                            y: typeof p.y === 'number' ? p.y : 750,
+                            direction: p.direction || 'down',
+                            behavior: 'idle',
+                            lastUpdated: Date.now(),
+                          },
+                        ];
+                      }
+                      return prev;
+                    });
+                  }
+
+                  // DETERMINISTIC INITIATOR: The peer with lexicographically smaller ID initiates
+                  // The other peer waits for incoming peer.on('connection') to prevent dual-connection collision
+                  const isInitiator = id < p.peerId;
+                  if (isInitiator && !connectionsRef.current.has(p.peerId)) {
+                    const conn = peer.connect(p.peerId, { reliable: true });
+                    setupConnection(conn, p.customization, { x: p.x, y: p.y, direction: p.direction });
+                  }
                 }
               }
             );
@@ -501,7 +532,7 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
           console.warn('P2P Join warning:', e);
         }
 
-        // Start 6-second heartbeat to discover new peers & keep coordinates synced
+        // Start 10-second heartbeat to discover new peers & keep coordinates synced
         heartbeatTimer = setInterval(async () => {
           if (isCancelled) return;
           try {
@@ -535,15 +566,50 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
                   y?: number;
                   direction?: 'up' | 'down' | 'left' | 'right';
                 }) => {
-                  if (p.peerId !== id && !connectionsRef.current.has(p.peerId)) {
-                    const conn = peer.connect(p.peerId, { reliable: true });
-                    setupConnection(conn, p.customization, { x: p.x, y: p.y, direction: p.direction });
+                  if (p.peerId !== id) {
+                    // Prevent adding clone of own cat
+                    const incomingName = p.customization?.name;
+                    if (incomingName && incomingName === myCatRef.current.name) {
+                      return;
+                    }
+
+                    // Pre-seed remote cat in local state so there is 0ms pop-in
+                    if (p.customization) {
+                      setOnlineCats((prev: OnlineCat[]) => {
+                        const matchIndex = prev.findIndex(
+                          (c: OnlineCat) => c.id === p.peerId || (incomingName && c.customization.name === incomingName)
+                        );
+                        if (matchIndex === -1) {
+                          return [
+                            ...prev,
+                            {
+                              id: p.peerId,
+                              customization: p.customization || FALLBACK_DEFAULT_CAT,
+                              stats: statsRef.current,
+                              x: typeof p.x === 'number' ? p.x : 1100,
+                              y: typeof p.y === 'number' ? p.y : 750,
+                              direction: p.direction || 'down',
+                              behavior: 'idle',
+                              lastUpdated: Date.now(),
+                            },
+                          ];
+                        }
+                        return prev;
+                      });
+                    }
+
+                    // DETERMINISTIC INITIATOR: The peer with lexicographically smaller ID initiates
+                    const isInitiator = id < p.peerId;
+                    if (isInitiator && !connectionsRef.current.has(p.peerId)) {
+                      const conn = peer.connect(p.peerId, { reliable: true });
+                      setupConnection(conn, p.customization, { x: p.x, y: p.y, direction: p.direction });
+                    }
                   }
                 }
               );
             }
           } catch {}
-        }, 6000);
+        }, 10000);
       });
 
       // Handle incoming connection from other peers

@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       friends,
       diary,
       achievements,
+      condo,
       slotIndex = 0,
     } = body;
 
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
           ...(friends ? { friendsJson: JSON.stringify(friends) } : {}),
           ...(diary ? { diaryJson: JSON.stringify(diary) } : {}),
           ...(achievements ? { achievementsJson: JSON.stringify(achievements) } : {}),
+          ...(condo ? { condoJson: JSON.stringify(condo) } : {}),
         },
       });
     } else {
@@ -108,6 +110,7 @@ export async function POST(request: Request) {
           friendsJson: JSON.stringify(friends || []),
           diaryJson: JSON.stringify(diary || []),
           achievementsJson: JSON.stringify(achievements || []),
+          condoJson: JSON.stringify(condo || {}),
         },
       });
     }

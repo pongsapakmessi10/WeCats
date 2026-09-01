@@ -12,10 +12,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing peerId or roomId' }, { status: 400 });
     }
 
-    const isPrivate = !roomId.startsWith('public-');
+    const isCustomPINRoom = !roomId.startsWith('public-') && !roomId.startsWith('condo-');
 
-    // 1. If it's a private room, verify that the room still exists in DB
-    if (isPrivate) {
+    // 1. If it's a custom PIN room, verify that the room still exists in DB
+    if (isCustomPINRoom) {
       const room = await prisma.room.findUnique({
         where: { id: roomId },
       });

@@ -71,6 +71,20 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
   if (!isOpen) return null;
 
   const handleSelectPublic = (channel: RoomItem) => {
+    if (currentRoom.id === channel.id) {
+      onClose();
+      return;
+    }
+
+    const liveCount = channel.currentCount;
+    if (liveCount >= channel.maxCapacity) {
+      soundManager.playPop();
+      setErrorMsg(
+        `ห้อง "${channel.name}" มีผู้เล่นเต็มแล้ว (${channel.maxCapacity}/${channel.maxCapacity} แมว) 🔴 กรุณาเลือก Plaza ถัดไป หรือสร้างห้องส่วนตัว`
+      );
+      return;
+    }
+
     soundManager.playSparkle();
     setCurrentRoom({
       id: channel.id,
@@ -120,6 +134,17 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
     e.preventDefault();
     if (!selectedPrivateRoom) return;
     setErrorMsg(null);
+
+    if (
+      currentRoom.id !== selectedPrivateRoom.id &&
+      selectedPrivateRoom.currentCount >= selectedPrivateRoom.maxCapacity
+    ) {
+      soundManager.playPop();
+      setErrorMsg(
+        `ห้องส่วนตัว "${selectedPrivateRoom.name}" เต็มแล้ว (${selectedPrivateRoom.maxCapacity}/${selectedPrivateRoom.maxCapacity} แมว) 🔴`
+      );
+      return;
+    }
 
     try {
       const res = await fetch('/api/rooms/join', {
@@ -284,6 +309,7 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
               publicChannels.map((ch) => {
                 const isCurrent = currentRoom.id === ch.id;
                 const liveCount = isCurrent ? onlineCats.length + 1 : ch.currentCount;
+                const isFull = liveCount >= ch.maxCapacity && !isCurrent;
 
                 return (
                   <div
@@ -292,6 +318,8 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
                     className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${
                       isCurrent
                         ? 'bg-[#ffcad4] border-[#523e32] shadow-md scale-[1.01]'
+                        : isFull
+                        ? 'bg-gray-50/80 border-[#ebd9c8] opacity-85 hover:border-red-300'
                         : 'bg-white border-[#ebd9c8] hover:border-[#ffcad4]'
                     }`}
                   >
@@ -307,8 +335,16 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="badge-pill bg-white/80 text-xs font-fredoka text-[#523e32] flex items-center gap-1">
-                        <Users size={12} /> {liveCount}/{ch.maxCapacity}
+                      <span
+                        className={`badge-pill text-xs font-fredoka flex items-center gap-1 font-bold ${
+                          isCurrent
+                            ? 'bg-white/90 text-[#523e32]'
+                            : isFull
+                            ? 'bg-red-100 text-red-700 border border-red-200'
+                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        }`}
+                      >
+                        <Users size={12} /> {liveCount}/{ch.maxCapacity} {isFull ? '🔴 เต็ม' : '🟢 ว่าง'}
                       </span>
                       {isCurrent && <Check size={16} className="text-emerald-700 font-bold" />}
                     </div>
@@ -351,6 +387,7 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
                   const isCurrent = currentRoom.id === room.id;
                   const isSelected = selectedPrivateRoom?.id === room.id;
                   const liveCount = isCurrent ? onlineCats.length + 1 : room.currentCount;
+                  const isFull = liveCount >= room.maxCapacity && !isCurrent;
 
                   return (
                     <div
@@ -374,8 +411,16 @@ export const ServerChannelModal: React.FC<ServerChannelModalProps> = ({ isOpen, 
                         <span className="font-fredoka font-bold text-xs text-[#523e32]">{room.name}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="badge-pill bg-white text-[11px] font-fredoka flex items-center gap-1">
-                          <Users size={11} /> {liveCount}/{room.maxCapacity}
+                        <span
+                          className={`badge-pill text-[11px] font-fredoka flex items-center gap-1 font-bold ${
+                            isCurrent
+                              ? 'bg-white text-[#523e32]'
+                              : isFull
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-emerald-50 text-emerald-700'
+                          }`}
+                        >
+                          <Users size={11} /> {liveCount}/{room.maxCapacity} {isFull ? '🔴 เต็ม' : '🟢 ว่าง'}
                         </span>
                         {isCurrent && <Check size={16} className="text-emerald-700 font-bold" />}
                         <button

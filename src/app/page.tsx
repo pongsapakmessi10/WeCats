@@ -13,6 +13,7 @@ import { CatShopModal } from '@/components/shop/CatShopModal';
 import { CatDiaryModal } from '@/components/diary/CatDiaryModal';
 import { FriendListModal } from '@/components/social/FriendListModal';
 import { DirectChatModal } from '@/components/social/DirectChatModal';
+import { CondoCustomizerModal } from '@/components/condo/CondoCustomizerModal';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { ServerChannelModal } from '@/components/hud/ServerChannelModal';
 import { RoomDeletedModal } from '@/components/hud/RoomDeletedModal';
@@ -36,6 +37,8 @@ export default function Home() {
   const stats = useCatStore((state) => state.stats);
   const updateCustomization = useCatStore((state) => state.updateCustomization);
   const setCurrentRoom = useCatStore((state) => state.setCurrentRoom);
+  const currentRoom = useCatStore((state) => state.currentRoom);
+  const isMobileDrawerOpen = useCatStore((state) => state.isMobileDrawerOpen);
 
   // Restore persistent room & in-game flag from localStorage on client mount
   useEffect(() => {
@@ -113,6 +116,15 @@ export default function Home() {
               aura: data.catProfile.aura,
               personality: data.catProfile.personality,
             });
+
+            if (data.catProfile.condoJson) {
+              try {
+                const c = JSON.parse(data.catProfile.condoJson);
+                if (c && typeof c === 'object') {
+                  useCatStore.getState().updateCondoCustomization(c);
+                }
+              } catch {}
+            }
           }
         } else {
           setIsInGame(false);
@@ -127,14 +139,15 @@ export default function Home() {
       });
   }, [updateCustomization]);
 
-  // Periodic Auto-Save Cat Data to Backend (every 15 seconds if logged in)
+  // Periodic Auto-Save Cat & Condo Data to Backend (every 15 seconds if logged in)
   useEffect(() => {
     if (!currentUser || !isInGame) return;
     const saveInterval = setInterval(() => {
+      const myCondo = useCatStore.getState().myCondo;
       fetch('/api/cat/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customization: myCat, stats }),
+        body: JSON.stringify({ customization: myCat, stats, condo: myCondo }),
       }).catch(() => {});
     }, 15000);
 
@@ -215,7 +228,7 @@ export default function Home() {
 
       {/* 3. FLOATING TOP HUD */}
       {isInGame && (
-        <div className="absolute top-0 left-0 right-0 p-3 sm:p-4 z-30 pointer-events-none flex flex-col gap-2.5 items-center animate-in fade-in">
+        <div className="absolute top-0 left-0 right-0 p-3 sm:p-4 z-40 pointer-events-none flex flex-col gap-2.5 items-center animate-in fade-in">
           <div className="w-full max-w-[96vw]">
             <TopNavBar
               onOpenAuth={() => setIsAuthOpen(true)}
@@ -234,26 +247,30 @@ export default function Home() {
       {/* 4. FLOATING BOTTOM HUD */}
       {isInGame && (
         <>
-          <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 z-30 pointer-events-none flex items-end justify-between gap-4 max-w-[96vw] mx-auto animate-in fade-in pb-[env(safe-area-inset-bottom,1rem)]">
+          <div className={`absolute bottom-0 left-0 right-0 p-3 sm:p-4 z-30 pointer-events-none flex items-end justify-between gap-4 max-w-[96vw] mx-auto animate-in fade-in pb-[env(safe-area-inset-bottom,1rem)] transition-all duration-300 ${
+            isMobileDrawerOpen ? 'opacity-0 pointer-events-none scale-95' : 'opacity-100'
+          }`}>
             {/* Left: Chat & Emotes */}
             <div className="pointer-events-auto">
               <ChatAndEmoteBox />
             </div>
 
             {/* Center: Quick Care Dock (Elevated on mobile above joystick & action button) */}
-            <div className="flex-1 flex justify-center mb-28 lg:mb-1 pointer-events-auto">
+            <div className="flex-1 flex justify-center mb-36 lg:mb-1 pointer-events-auto">
               <QuickCareDock />
             </div>
 
-            {/* Right: Tip Badge */}
-            <div className="hidden lg:flex flex-col items-end gap-1 pointer-events-auto">
-              <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl border-2 border-[#ebd9c8] shadow-lg flex flex-col items-end">
-                <span className="font-fredoka font-bold text-xs text-[#523e32]">💡 ทริคทาสแมว</span>
-                <span className="font-itim text-[11px] text-[#8d7568]">
-                  กดสลับห้องที่แถบด้านบน เพื่อเล่นในสวนซากุระ หรือสร้างห้องส่วนตัวใส่รหัส PIN 🌸
-                </span>
+            {/* Right: Tip Badge (Only shown in Plaza, hidden in Condo) */}
+            {currentRoom.theme !== 'condo' && currentRoom.type !== 'condo' && (
+              <div className="hidden lg:flex flex-col items-end gap-1 pointer-events-auto">
+                <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl border-2 border-[#ebd9c8] shadow-lg flex flex-col items-end">
+                  <span className="font-fredoka font-bold text-xs text-[#523e32]">💡 ทริคทาสแมว</span>
+                  <span className="font-itim text-[11px] text-[#8d7568]">
+                    กดสลับห้องที่แถบด้านบน เพื่อเล่นในสวนซากุระ หรือสร้างห้องส่วนตัวใส่รหัส PIN 🌸
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Touch-Screen Virtual Controls for Mobile & iPad */}
@@ -270,6 +287,7 @@ export default function Home() {
       <CatDiaryModal />
       <FriendListModal />
       <DirectChatModal />
+      <CondoCustomizerModal />
 
       <AuthModal
         isOpen={isAuthOpen}

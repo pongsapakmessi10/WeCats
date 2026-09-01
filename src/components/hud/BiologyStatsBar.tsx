@@ -20,6 +20,9 @@ export const BiologyStatsBar: React.FC<BiologyStatsBarProps> = ({ isAuthLoading 
   const myCat = useCatStore((state) => state.myCat);
   const stats = useCatStore((state) => state.stats);
 
+  const currentRoom = useCatStore((state) => state.currentRoom);
+  const isCondo = currentRoom.theme === 'condo' || currentRoom.type === 'condo';
+
   const getChonkyLabel = (kg: number) => {
     if (kg < 4.0) return { text: 'เพรียวลม', color: 'bg-emerald-100 text-emerald-800' };
     if (kg < 6.0) return { text: 'นุ้มนุ่ม', color: 'bg-amber-100 text-amber-800' };
@@ -38,7 +41,7 @@ export const BiologyStatsBar: React.FC<BiologyStatsBarProps> = ({ isAuthLoading 
   }
 
   return (
-    <div className="w-full max-w-4xl pointer-events-auto flex flex-col items-center">
+    <div className={`w-full ${isCondo ? 'max-w-2xl' : 'max-w-4xl'} pointer-events-auto flex flex-col items-center transition-all duration-300`}>
       
       {/* 📱 MOBILE COMPACT MICRO-CAPSULE (< lg screens) */}
       <div className="flex lg:hidden flex-col items-center w-full max-w-sm">
@@ -145,51 +148,55 @@ export const BiologyStatsBar: React.FC<BiologyStatsBarProps> = ({ isAuthLoading 
       </div>
 
       {/* 🖥️ DESKTOP FULL BIOLOGY GAUGE BAR (>= lg screens) */}
-      <div className="hidden lg:flex w-full bg-white/90 backdrop-blur-md px-6 py-3.5 rounded-3xl border-3 border-[#ebd9c8] shadow-lg items-center justify-between gap-4 animate-in fade-in">
+      <div className={`hidden lg:flex w-full bg-white/92 backdrop-blur-md ${
+        isCondo ? 'px-4 py-2 rounded-2xl gap-3 shadow-md' : 'px-6 py-3.5 rounded-3xl gap-4 shadow-lg'
+      } border-3 border-[#ebd9c8] items-center justify-between animate-in fade-in transition-all`}>
         
         {/* 1. Profile & Affection Level */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <div className="relative">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#ffcad4] to-[#ffe5a3] border-2 border-[#523e32] flex items-center justify-center shadow-inner">
-              <CatPawIcon size={24} color="#523e32" />
+            <div className={`${isCondo ? 'w-9 h-9' : 'w-12 h-12'} rounded-2xl bg-gradient-to-tr from-[#ffcad4] to-[#ffe5a3] border-2 border-[#523e32] flex items-center justify-center shadow-inner`}>
+              <CatPawIcon size={isCondo ? 18 : 24} color="#523e32" />
             </div>
-            <span className="absolute -bottom-1.5 -right-1.5 bg-[#ffe5a3] border border-[#523e32] text-[#523e32] text-[10px] font-fredoka font-bold px-1.5 py-0.2 rounded-full">
+            <span className="absolute -bottom-1 -right-1 bg-[#ffe5a3] border border-[#523e32] text-[#523e32] text-[9px] font-fredoka font-bold px-1 rounded-full">
               Lv.{stats.affectionLevel}
             </span>
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-fredoka font-bold text-sm text-[#523e32]">{myCat.name}</span>
-              <span className={`badge-pill text-[10px] font-fredoka py-0.5 ${chonkInfo.color}`}>
-                {stats.weightKg} kg • {chonkInfo.text}
+              <span className="font-fredoka font-bold text-xs sm:text-sm text-[#523e32]">{myCat.name}</span>
+              <span className={`badge-pill text-[9px] font-fredoka py-0.2 ${chonkInfo.color}`}>
+                {stats.weightKg} kg
               </span>
             </div>
-            <div className="flex items-center gap-1 mt-0.5">
-              <div className="w-24 h-2 bg-[#ebd9c8] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-[#ffcad4] to-[#ff758f] transition-all duration-300"
-                  style={{ width: `${(stats.affectionExp % 100)}%` }}
-                />
+            {!isCondo && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <div className="w-24 h-2 bg-[#ebd9c8] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-[#ffcad4] to-[#ff758f] transition-all duration-300"
+                    style={{ width: `${(stats.affectionExp % 100)}%` }}
+                  />
+                </div>
+                <span className="font-itim text-[11px] text-[#8d7568]">Bonding Exp</span>
               </div>
-              <span className="font-itim text-[11px] text-[#8d7568]">Bonding Exp</span>
-            </div>
+            )}
           </div>
         </div>
 
         {/* 2. Realistic Biology Stat Gauges */}
-        <div className="flex items-center gap-6 flex-1 justify-end flex-wrap">
+        <div className={`flex items-center ${isCondo ? 'gap-3.5' : 'gap-6'} flex-1 justify-end flex-wrap`}>
           
           {/* Hunger */}
-          <div className="flex items-center gap-2" title="ความอิ่ม (Hunger)">
-            <div className="w-8 h-8 rounded-xl bg-[#ffe4e9] border border-[#523e32]/20 flex items-center justify-center shadow-sm">
-              <FoodBowlIcon size={18} />
+          <div className="flex items-center gap-1.5" title="ความอิ่ม (Hunger)">
+            <div className={`${isCondo ? 'w-7 h-7' : 'w-8 h-8'} rounded-xl bg-[#ffe4e9] border border-[#523e32]/20 flex items-center justify-center shadow-sm`}>
+              <FoodBowlIcon size={isCondo ? 15 : 18} />
             </div>
             <div className="space-y-0.5">
-              <div className="flex justify-between text-[11px] font-fredoka font-bold text-[#523e32]">
+              <div className="flex justify-between text-[10px] font-fredoka font-bold text-[#523e32]">
                 <span>อิ่ม</span>
                 <span>{Math.round(stats.hunger)}%</span>
               </div>
-              <div className="w-20 h-2 bg-[#f0e6df] rounded-full overflow-hidden">
+              <div className={`${isCondo ? 'w-14' : 'w-20'} h-2 bg-[#f0e6df] rounded-full overflow-hidden`}>
                 <div
                   className="h-full bg-[#ff9770] transition-all duration-500 rounded-full"
                   style={{ width: `${stats.hunger}%` }}
@@ -199,16 +206,16 @@ export const BiologyStatsBar: React.FC<BiologyStatsBarProps> = ({ isAuthLoading 
           </div>
 
           {/* Hydration */}
-          <div className="flex items-center gap-2" title="น้ำดื่ม (Hydration)">
-            <div className="w-8 h-8 rounded-xl bg-[#e8f4fc] border border-[#523e32]/20 flex items-center justify-center shadow-sm">
-              <WaterDropIcon size={18} />
+          <div className="flex items-center gap-1.5" title="น้ำดื่ม (Hydration)">
+            <div className={`${isCondo ? 'w-7 h-7' : 'w-8 h-8'} rounded-xl bg-[#e8f4fc] border border-[#523e32]/20 flex items-center justify-center shadow-sm`}>
+              <WaterDropIcon size={isCondo ? 15 : 18} />
             </div>
             <div className="space-y-0.5">
-              <div className="flex justify-between text-[11px] font-fredoka font-bold text-[#523e32]">
+              <div className="flex justify-between text-[10px] font-fredoka font-bold text-[#523e32]">
                 <span>น้ำ</span>
                 <span>{Math.round(stats.hydration)}%</span>
               </div>
-              <div className="w-20 h-2 bg-[#f0e6df] rounded-full overflow-hidden">
+              <div className={`${isCondo ? 'w-14' : 'w-20'} h-2 bg-[#f0e6df] rounded-full overflow-hidden`}>
                 <div
                   className="h-full bg-[#70d6ff] transition-all duration-500 rounded-full"
                   style={{ width: `${stats.hydration}%` }}
@@ -218,16 +225,16 @@ export const BiologyStatsBar: React.FC<BiologyStatsBarProps> = ({ isAuthLoading 
           </div>
 
           {/* Happiness */}
-          <div className="flex items-center gap-2" title="ความสุขและเสียงกรน (Happiness)">
-            <div className="w-8 h-8 rounded-xl bg-[#fff0f3] border border-[#523e32]/20 flex items-center justify-center shadow-sm">
-              <PetHeartIcon size={18} />
+          <div className="flex items-center gap-1.5" title="ความสุขและเสียงกรน (Happiness)">
+            <div className={`${isCondo ? 'w-7 h-7' : 'w-8 h-8'} rounded-xl bg-[#fff0f3] border border-[#523e32]/20 flex items-center justify-center shadow-sm`}>
+              <PetHeartIcon size={isCondo ? 15 : 18} />
             </div>
             <div className="space-y-0.5">
-              <div className="flex justify-between text-[11px] font-fredoka font-bold text-[#523e32]">
+              <div className="flex justify-between text-[10px] font-fredoka font-bold text-[#523e32]">
                 <span>ความสุข</span>
                 <span>{Math.round(stats.happiness)}%</span>
               </div>
-              <div className="w-20 h-2 bg-[#f0e6df] rounded-full overflow-hidden">
+              <div className={`${isCondo ? 'w-14' : 'w-20'} h-2 bg-[#f0e6df] rounded-full overflow-hidden`}>
                 <div
                   className="h-full bg-[#ff70a6] transition-all duration-500 rounded-full"
                   style={{ width: `${stats.happiness}%` }}
@@ -237,16 +244,16 @@ export const BiologyStatsBar: React.FC<BiologyStatsBarProps> = ({ isAuthLoading 
           </div>
 
           {/* Hygiene / Grooming */}
-          <div className="flex items-center gap-2" title="ความสะอาดขน ป้องกันก้อนขน (Hygiene)">
-            <div className="w-8 h-8 rounded-xl bg-[#e5f8f0] border border-[#523e32]/20 flex items-center justify-center shadow-sm">
-              <GroomBrushIcon size={18} />
+          <div className="flex items-center gap-1.5" title="ความสะอาดขน ป้องกันก้อนขน (Hygiene)">
+            <div className={`${isCondo ? 'w-7 h-7' : 'w-8 h-8'} rounded-xl bg-[#e5f8f0] border border-[#523e32]/20 flex items-center justify-center shadow-sm`}>
+              <GroomBrushIcon size={isCondo ? 15 : 18} />
             </div>
             <div className="space-y-0.5">
-              <div className="flex justify-between text-[11px] font-fredoka font-bold text-[#523e32]">
+              <div className="flex justify-between text-[10px] font-fredoka font-bold text-[#523e32]">
                 <span>ขนสวย</span>
                 <span>{Math.round(stats.hygiene)}%</span>
               </div>
-              <div className="w-20 h-2 bg-[#f0e6df] rounded-full overflow-hidden">
+              <div className={`${isCondo ? 'w-14' : 'w-20'} h-2 bg-[#f0e6df] rounded-full overflow-hidden`}>
                 <div
                   className="h-full bg-[#06d6a0] transition-all duration-500 rounded-full"
                   style={{ width: `${stats.hygiene}%` }}
@@ -256,18 +263,18 @@ export const BiologyStatsBar: React.FC<BiologyStatsBarProps> = ({ isAuthLoading 
           </div>
 
           {/* Zoomies Energy */}
-          <div className="flex items-center gap-2" title="พลังงาน Zoomies">
-            <div className={`w-8 h-8 rounded-xl border flex items-center justify-center shadow-sm transition-all ${
+          <div className="flex items-center gap-1.5" title="พลังงาน Zoomies">
+            <div className={`${isCondo ? 'w-7 h-7' : 'w-8 h-8'} rounded-xl border flex items-center justify-center shadow-sm transition-all ${
               stats.isZooming ? 'bg-amber-400 border-amber-600 animate-bounce' : 'bg-[#fff6d6] border-[#523e32]/20'
             }`}>
-              <LaserZapIcon size={18} />
+              <LaserZapIcon size={isCondo ? 15 : 18} />
             </div>
             <div className="space-y-0.5">
-              <div className="flex justify-between text-[11px] font-fredoka font-bold text-[#523e32]">
+              <div className="flex justify-between text-[10px] font-fredoka font-bold text-[#523e32]">
                 <span>Zoomies</span>
                 <span>{Math.round(stats.zoomiesEnergy)}%</span>
               </div>
-              <div className="w-20 h-2 bg-[#f0e6df] rounded-full overflow-hidden">
+              <div className={`${isCondo ? 'w-14' : 'w-20'} h-2 bg-[#f0e6df] rounded-full overflow-hidden`}>
                 <div
                   className="h-full bg-[#ffd166] transition-all duration-300 rounded-full"
                   style={{ width: `${stats.zoomiesEnergy}%` }}
