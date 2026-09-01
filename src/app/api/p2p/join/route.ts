@@ -12,8 +12,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing peerId or roomId' }, { status: 400 });
     }
 
+    let cleanRoomId = roomId;
+    try {
+      cleanRoomId = decodeURIComponent(roomId).trim().toLowerCase().replace(/^presence-/, '');
+    } catch {
+      cleanRoomId = roomId.trim().toLowerCase().replace(/^presence-/, '');
+    }
+
     const now = new Date();
-    const staleThreshold = new Date(Date.now() - 25000); // 25s cutoff
+    const staleThreshold = new Date(Date.now() - 12000); // 12s cutoff (3 heartbeat cycles)
     const userId = session?.userId || null;
     const username = session?.username || catCustomization?.name || 'Player';
 
@@ -26,21 +33,14 @@ export async function POST(request: Request) {
       })
       .catch(() => {});
 
-    // 2. Prevent duplicate clone sessions for the same user account
+    // 2. Prevent duplicate clone sessions for the same logged-in account
     if (userId) {
       await prisma.activePeer.deleteMany({
         where: {
           userId,
           id: { not: peerId },
         },
-      });
-    } else if (username && username !== 'Player' && username !== 'เพื่อนแมว') {
-      await prisma.activePeer.deleteMany({
-        where: {
-          username,
-          id: { not: peerId },
-        },
-      });
+      }).catch(() => {});
     }
 
     const catDataToStore = {
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     await prisma.activePeer.upsert({
       where: { id: peerId },
       update: {
-        roomId,
+        roomId: cleanRoomId,
         userId,
         username,
         catJson: JSON.stringify(catDataToStore),
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       },
       create: {
         id: peerId,
-        roomId,
+        roomId: cleanRoomId,
         userId,
         username,
         catJson: JSON.stringify(catDataToStore),
@@ -73,15 +73,15 @@ export async function POST(request: Request) {
     // 4. Query active peers in the same room (excluding myself and other tabs of my account)
     const activePeers = await prisma.activePeer.findMany({
       where: {
-        roomId,
+        roomId: cleanRoomId,
         id: { not: peerId },
         ...(userId ? { userId: { not: userId } } : {}),
-        ...(username && username !== 'Player' ? { username: { not: username } } : {}),
         lastSeen: { gte: staleThreshold },
       },
+      orderBy: { lastSeen: 'desc' },
     });
 
-    // 4. Return strictly de-duplicated peers to all clients
+    // 5. Return all distinct active peers in the room
     const seen = new Set<string>();
     const uniquePeers: Array<{
       peerId: string;
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
         cat = JSON.parse(p.catJson);
       } catch {}
 
-      const identifier = p.userId || p.username || cat.name || p.id;
+      const identifier = p.userId || p.id;
       if (!seen.has(identifier)) {
         seen.add(identifier);
         uniquePeers.push({

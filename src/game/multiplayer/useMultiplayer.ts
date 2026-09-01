@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { useCatStore } from '@/store/catStore';
+import { useCatStore, normalizeRoomId } from '@/store/catStore';
 import { soundManager } from '@/audio/soundManager';
 import { OnlineCat, CatCustomization, CatStats } from '@/types/game';
 import type { DataConnection, Peer as PeerType } from 'peerjs';
@@ -68,6 +68,8 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
   const myPeerIdRef = useRef<string>('');
   const lastMoveSentRef = useRef<number>(0);
   const wasMovingRef = useRef<boolean>(false);
+  const handleIncomingPacketRef = useRef<(packet: any, senderPeerId: string) => void>(() => {});
+  const chatBubbleTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   // Sync mutable refs
   useEffect(() => {
@@ -84,28 +86,10 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
 
       // 1. Movement Sync
       if (type === 'cat-move') {
-        const incomingName = packet.customization?.name;
-        if (incomingName && incomingName === myCatRef.current.name) {
-          if (typeof window !== 'undefined' && typeof packet.x === 'number' && typeof packet.y === 'number') {
-            window.dispatchEvent(
-              new CustomEvent('wecats-self-pos-sync', {
-                detail: {
-                  x: packet.x,
-                  y: packet.y,
-                  direction: packet.direction || 'down',
-                  isMoving: packet.isMoving,
-                  behavior: packet.behavior || 'idle',
-                },
-              })
-            );
-          }
-          return;
-        }
+        if (senderPeerId === myPeerIdRef.current) return;
 
         setOnlineCats((prev: OnlineCat[]) => {
-          const matchIndex = prev.findIndex(
-            (c: OnlineCat) => c.id === senderPeerId || (incomingName && c.customization.name === incomingName)
-          );
+          const matchIndex = prev.findIndex((c: OnlineCat) => c.id === senderPeerId);
 
           if (matchIndex === -1) {
             return [
@@ -142,18 +126,13 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
 
       // 2. Cat Joined / Handshake (Syncs Appearance + Real Coordinates seamlessly)
       else if (type === 'cat-joined') {
+        if (senderPeerId === myPeerIdRef.current) return;
         const posX = typeof packet.x === 'number' ? packet.x : 700;
         const posY = typeof packet.y === 'number' ? packet.y : 480;
         const posDir = packet.direction || 'down';
-        const incomingCatName = packet.customization?.name;
-
-        if (incomingCatName && incomingCatName === myCatRef.current.name) return;
 
         setOnlineCats((prev: OnlineCat[]) => {
-          // Check if peer already exists by ID OR by same cat name (seamless reconnect)
-          const existingIndex = prev.findIndex(
-            (c: OnlineCat) => c.id === senderPeerId || (incomingCatName && c.customization.name === incomingCatName)
-          );
+          const existingIndex = prev.findIndex((c: OnlineCat) => c.id === senderPeerId);
 
           if (existingIndex !== -1) {
             const updated = [...prev];
@@ -188,7 +167,7 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
         // If packet has condoConfig from owner, sync it live for visitors
         if (packet.condoConfig) {
           const currentRoom = useCatStore.getState().currentRoom;
-          if (currentRoom.type === 'condo') {
+          if (currentRoom.type === 'condo' || currentRoom.theme === 'condo') {
             useCatStore.setState({
               currentRoom: { ...currentRoom, condoConfig: packet.condoConfig },
             });
@@ -201,11 +180,12 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
           if (conn && conn.open) {
             const myPos = getCurrentPlayerPos();
             const currentRoom = useCatStore.getState().currentRoom;
+            const isCondo = currentRoom.type === 'condo' || currentRoom.theme === 'condo';
             conn.send({
               type: 'cat-joined',
               customization: myCatRef.current,
               stats: statsRef.current,
-              condoConfig: currentRoom.type === 'condo' ? useCatStore.getState().myCondo : undefined,
+              condoConfig: isCondo ? (currentRoom.condoConfig || useCatStore.getState().myCondo) : undefined,
               x: myPos.x,
               y: myPos.y,
               direction: myPos.direction,
@@ -215,19 +195,35 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
         }
       }
 
+      // 2.1 Condo Live Decoration Update
+      else if (type === 'condo-update') {
+        if (packet.condoConfig) {
+          const currentRoom = useCatStore.getState().currentRoom;
+          if (currentRoom.type === 'condo' || currentRoom.theme === 'condo') {
+            useCatStore.setState({
+              currentRoom: { ...currentRoom, condoConfig: packet.condoConfig },
+            });
+          }
+        }
+      }
+
       // 3. Chat / Emote
       else if (type === 'cat-chat') {
+        const currentActiveRoom = useCatStore.getState().currentRoom;
+        const normPacketRoom = normalizeRoomId(packet.roomId);
+        const normCurrentRoom = normalizeRoomId(currentActiveRoom.id);
+
         // Strict Room Isolation Guard: Discard packet if it belongs to another room
-        if (packet.roomId && packet.roomId !== roomId) return;
+        if (normPacketRoom && normCurrentRoom && normPacketRoom !== normCurrentRoom) return;
 
         soundManager.playPop();
         const senderCat = useCatStore.getState().onlineCats.find((c) => c.id === senderPeerId);
         const senderName = packet.senderName || senderCat?.customization?.name || 'เพื่อนแมว';
 
         if (packet.text) {
-          useCatStore.getState().receiveChatMessage(senderPeerId, senderName, packet.text, roomId);
+          useCatStore.getState().receiveChatMessage(senderPeerId, senderName, packet.text, currentActiveRoom.id, packet.msgId);
         } else if (packet.emote) {
-          useCatStore.getState().receiveChatMessage(senderPeerId, senderName, packet.emote, roomId);
+          useCatStore.getState().receiveChatMessage(senderPeerId, senderName, packet.emote, currentActiveRoom.id, packet.msgId);
         }
 
         setOnlineCats((prev: OnlineCat[]) =>
@@ -242,7 +238,12 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
           )
         );
 
-        setTimeout(() => {
+        // Reset any existing bubble timer for this peer to prevent premature disappearance
+        if (chatBubbleTimersRef.current.has(senderPeerId)) {
+          clearTimeout(chatBubbleTimersRef.current.get(senderPeerId)!);
+        }
+
+        const bubbleTimer = setTimeout(() => {
           setOnlineCats((prev: OnlineCat[]) =>
             prev.map((c: OnlineCat) =>
               c.id === senderPeerId
@@ -254,7 +255,10 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
                 : c
             )
           );
+          chatBubbleTimersRef.current.delete(senderPeerId);
         }, 4500);
+
+        chatBubbleTimersRef.current.set(senderPeerId, bubbleTimer);
       }
 
       // 4. Friend Actions (Treats, Requests, Accepted)
@@ -302,9 +306,14 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
         }
       }
 
-      // 4.3 Real-Time 1-to-1 Direct Message
+      // 4.3 Real-Time 1-to-1 Direct Message (Matches by PeerID or Persistent CatName)
       else if (type === 'direct-message') {
-        if (packet.toPeerId === myPeerIdRef.current || !packet.toPeerId) {
+        const isTarget =
+          packet.toPeerId === myPeerIdRef.current ||
+          (packet.targetCatName && packet.targetCatName === myCatRef.current.name) ||
+          !packet.toPeerId;
+
+        if (isTarget) {
           soundManager.playPop();
           const dm = {
             id: `dm-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -328,6 +337,8 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
     [setOnlineCats, setNotification]
   );
 
+  handleIncomingPacketRef.current = handleIncomingPacket;
+
   // Setup connection event handlers for a DataConnection
   const setupConnection = useCallback(
     (
@@ -337,24 +348,33 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
     ) => {
       const targetPeerId = conn.peer;
 
-      conn.on('open', () => {
+      // Prevent dual connection glare: if an open connection already exists, don't duplicate
+      const existingConn = connectionsRef.current.get(targetPeerId);
+      if (existingConn && existingConn !== conn) {
+        if (existingConn.open) {
+          try {
+            conn.close();
+          } catch {}
+          return;
+        } else {
+          try {
+            existingConn.close();
+          } catch {}
+        }
+      }
+
+      const onOpen = () => {
         connectionsRef.current.set(targetPeerId, conn);
 
         const initX = typeof initialPos?.x === 'number' ? initialPos.x : 700;
         const initY = typeof initialPos?.y === 'number' ? initialPos.y : 480;
         const initDir = initialPos?.direction || 'down';
 
-        // Prevent adding clone of own cat
-        const incomingName = initialCustomization?.name;
-        if (incomingName && incomingName === myCatRef.current.name) {
-          return;
-        }
+        if (targetPeerId === myPeerIdRef.current) return;
 
         // Add or update online cats seamlessly
         setOnlineCats((prev: OnlineCat[]) => {
-          const matchIndex = prev.findIndex(
-            (c: OnlineCat) => c.id === targetPeerId || (incomingName && c.customization.name === incomingName)
-          );
+          const matchIndex = prev.findIndex((c: OnlineCat) => c.id === targetPeerId);
 
           if (matchIndex !== -1) {
             const updated = [...prev];
@@ -394,20 +414,29 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
         // Send our cat appearance handshake with our exact position
         const myPos = getCurrentPlayerPos();
         const curRoom = useCatStore.getState().currentRoom;
-        conn.send({
-          type: 'cat-joined',
-          customization: myCatRef.current,
-          stats: statsRef.current,
-          condoConfig: curRoom.type === 'condo' ? useCatStore.getState().myCondo : undefined,
-          x: myPos.x,
-          y: myPos.y,
-          direction: myPos.direction,
-          isGreeting: true,
-        });
-      });
+        const inCondo = curRoom.type === 'condo' || curRoom.theme === 'condo';
+        try {
+          conn.send({
+            type: 'cat-joined',
+            customization: myCatRef.current,
+            stats: statsRef.current,
+            condoConfig: inCondo ? (curRoom.condoConfig || useCatStore.getState().myCondo) : undefined,
+            x: myPos.x,
+            y: myPos.y,
+            direction: myPos.direction,
+            isGreeting: true,
+          });
+        } catch {}
+      };
+
+      if (conn.open) {
+        onOpen();
+      } else {
+        conn.on('open', onOpen);
+      }
 
       conn.on('data', (data) => {
-        handleIncomingPacket(data, targetPeerId);
+        handleIncomingPacketRef.current(data, targetPeerId);
       });
 
       conn.on('close', () => {
@@ -423,7 +452,6 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
       conn.on('error', (err) => {
         console.warn(`P2P connection notice for ${targetPeerId}:`, err);
         connectionsRef.current.delete(targetPeerId);
-        // Do not immediately delete cat on transient socket error; let heartbeat and grace period reconcile
       });
     },
     [handleIncomingPacket, setOnlineCats]
@@ -450,7 +478,11 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
             { urls: 'stun:global.stun.twilio.com:3478' },
+            { urls: 'stun:stun.cloudflare.com:3478' },
           ],
         },
       });
@@ -517,10 +549,8 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
                     });
                   }
 
-                  // DETERMINISTIC INITIATOR: The peer with lexicographically smaller ID initiates
-                  // The other peer waits for incoming peer.on('connection') to prevent dual-connection collision
-                  const isInitiator = id < p.peerId;
-                  if (isInitiator && !connectionsRef.current.has(p.peerId)) {
+                  // Immediately establish P2P connection to all active room peers
+                  if (!connectionsRef.current.has(p.peerId) || !connectionsRef.current.get(p.peerId)?.open) {
                     const conn = peer.connect(p.peerId, { reliable: true });
                     setupConnection(conn, p.customization, { x: p.x, y: p.y, direction: p.direction });
                   }
@@ -532,7 +562,7 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
           console.warn('P2P Join warning:', e);
         }
 
-        // Start 10-second heartbeat to discover new peers & keep coordinates synced
+        // Fast 4-second heartbeat to discover new peers, keep mesh healthy, and sync coordinates
         heartbeatTimer = setInterval(async () => {
           if (isCancelled) return;
           try {
@@ -558,6 +588,11 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
             }
 
             if (hbData.peers && Array.isArray(hbData.peers)) {
+              // 1. Prune ghost / disconnected cats that are no longer active in the room
+              const activePeerIds = new Set(hbData.peers.map((p: any) => p.peerId));
+              setOnlineCats((prev: OnlineCat[]) => prev.filter((c: OnlineCat) => activePeerIds.has(c.id)));
+
+              // 2. Reconcile & connect with active peers
               hbData.peers.forEach(
                 (p: {
                   peerId: string;
@@ -567,18 +602,10 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
                   direction?: 'up' | 'down' | 'left' | 'right';
                 }) => {
                   if (p.peerId !== id) {
-                    // Prevent adding clone of own cat
-                    const incomingName = p.customization?.name;
-                    if (incomingName && incomingName === myCatRef.current.name) {
-                      return;
-                    }
-
                     // Pre-seed remote cat in local state so there is 0ms pop-in
                     if (p.customization) {
                       setOnlineCats((prev: OnlineCat[]) => {
-                        const matchIndex = prev.findIndex(
-                          (c: OnlineCat) => c.id === p.peerId || (incomingName && c.customization.name === incomingName)
-                        );
+                        const matchIndex = prev.findIndex((c: OnlineCat) => c.id === p.peerId);
                         if (matchIndex === -1) {
                           return [
                             ...prev,
@@ -598,9 +625,8 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
                       });
                     }
 
-                    // DETERMINISTIC INITIATOR: The peer with lexicographically smaller ID initiates
-                    const isInitiator = id < p.peerId;
-                    if (isInitiator && !connectionsRef.current.has(p.peerId)) {
+                    // Connect or repair connection if not connected yet
+                    if (!connectionsRef.current.has(p.peerId) || !connectionsRef.current.get(p.peerId)?.open) {
                       const conn = peer.connect(p.peerId, { reliable: true });
                       setupConnection(conn, p.customization, { x: p.x, y: p.y, direction: p.direction });
                     }
@@ -609,7 +635,7 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
               );
             }
           } catch {}
-        }, 10000);
+        }, 4000);
       });
 
       // Handle incoming connection from other peers
@@ -633,10 +659,34 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
+    // Auto-reconnect and refresh heartbeat when coming back from mobile background / screen lock
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && myPeerIdRef.current) {
+        const myPos = getCurrentPlayerPos();
+        fetch('/api/p2p/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            peerId: myPeerIdRef.current,
+            roomId,
+            catCustomization: myCatRef.current,
+            pos: myPos,
+          }),
+        }).catch(() => {});
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       isCancelled = true;
       clearInterval(heartbeatTimer);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+
+      // Clear all active speech bubble timers
+      chatBubbleTimersRef.current.forEach((t) => clearTimeout(t));
+      chatBubbleTimersRef.current.clear();
 
       if (myPeerIdRef.current) {
         fetch('/api/p2p/leave', {
@@ -653,8 +703,6 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
         peerInstanceRef.current.destroy();
         peerInstanceRef.current = null;
       }
-
-      unregisterP2PSender();
     };
   }, [roomId, setOnlineCats, setupConnection]);
 
@@ -671,8 +719,22 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
 
   useEffect(() => {
     registerP2PSender(broadcastToAllPeers);
+
+    const handleWindowBroadcast = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        broadcastToAllPeers(customEvent.detail);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('wecats-p2p-broadcast', handleWindowBroadcast);
+    }
+
     return () => {
-      unregisterP2PSender();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('wecats-p2p-broadcast', handleWindowBroadcast);
+      }
     };
   }, [broadcastToAllPeers]);
 

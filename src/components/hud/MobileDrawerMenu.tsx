@@ -122,20 +122,22 @@ export const MobileDrawerMenu: React.FC<MobileDrawerMenuProps> = ({
             {/* 0. Condo / Home Button */}
             {useCatStore.getState().currentRoom.type === 'condo' ? (
               <>
-                <button
-                  onClick={() => {
-                    soundManager.playSparkle();
-                    onClose();
-                    useCatStore.getState().setIsCondoCustomizerOpen(true);
-                  }}
-                  className="w-full btn-jelly flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-[#ffcad4] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32]"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Palette size={18} />
-                    <span>ตกแต่งคอนโดแมว 🎨</span>
-                  </div>
-                  <span className="text-[10px] text-[#8d7568] font-itim">เปลี่ยนลาย 🛋️</span>
-                </button>
+                {(!useCatStore.getState().currentRoom.ownerName || useCatStore.getState().currentRoom.ownerName === myCat.name) && (
+                  <button
+                    onClick={() => {
+                      soundManager.playSparkle();
+                      onClose();
+                      useCatStore.getState().setIsCondoCustomizerOpen(true);
+                    }}
+                    className="w-full btn-jelly flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-[#ffcad4] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32]"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Palette size={18} />
+                      <span>ตกแต่งคอนโดแมว 🎨</span>
+                    </div>
+                    <span className="text-[10px] text-[#8d7568] font-itim">เปลี่ยนลาย 🛋️</span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => {

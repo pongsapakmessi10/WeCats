@@ -13,6 +13,12 @@ export function unregisterP2PSender() {
 
 export function broadcastP2PPacket(packet: any) {
   if (globalSendFunction) {
-    globalSendFunction(packet);
+    try {
+      globalSendFunction(packet);
+      return;
+    } catch {}
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('wecats-p2p-broadcast', { detail: packet }));
   }
 }

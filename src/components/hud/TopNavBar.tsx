@@ -62,7 +62,9 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   const isSoundEnabled = useCatStore((state) => state.isSoundEnabled);
   const toggleSound = useCatStore((state) => state.toggleSound);
   const currentRoom = useCatStore((state) => state.currentRoom);
+  const myCat = useCatStore((state) => state.myCat);
   const isCondo = currentRoom.theme === 'condo' || currentRoom.type === 'condo';
+  const isCondoOwner = isCondo && (!currentRoom.ownerName || currentRoom.ownerName === myCat.name);
   const setIsCondoCustomizerOpen = useCatStore((state) => state.setIsCondoCustomizerOpen);
   const enterMyCondo = useCatStore((state) => state.enterMyCondo);
   const exitCondoToPlaza = useCatStore((state) => state.exitCondoToPlaza);
@@ -205,8 +207,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
               )}
             </button>
 
-            {/* Condo Quick Decorate Button on Mobile (Only in Condo) */}
-            {isCondo && (
+            {/* Condo Quick Decorate Button on Mobile (Only for Owner) */}
+            {isCondo && isCondoOwner && (
               <button
                 onClick={() => {
                   soundManager.playSparkle();
@@ -304,17 +306,19 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
             {/* Condo Home / Exit Button */}
             {isCondo ? (
               <>
-                <button
-                  onClick={() => {
-                    soundManager.playSparkle();
-                    setIsCondoCustomizerOpen(true);
-                  }}
-                  className="btn-jelly flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-[#ffd166] to-[#ffcad4] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32] shrink-0 whitespace-nowrap shadow-md"
-                  title="คลิกเพื่อตกแต่งห้องคอนโดแมว 🎨 (วอลเปเปอร์ พื้น โซฟา พรม)"
-                >
-                  <Palette size={15} />
-                  <span className="whitespace-nowrap font-extrabold">ตกแต่งห้อง 🎨</span>
-                </button>
+                {isCondoOwner && (
+                  <button
+                    onClick={() => {
+                      soundManager.playSparkle();
+                      setIsCondoCustomizerOpen(true);
+                    }}
+                    className="btn-jelly flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-[#ffd166] to-[#ffcad4] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32] shrink-0 whitespace-nowrap shadow-md"
+                    title="คลิกเพื่อตกแต่งห้องคอนโดแมว 🎨 (วอลเปเปอร์ พื้น โซฟา พรม)"
+                  >
+                    <Palette size={15} />
+                    <span className="whitespace-nowrap font-extrabold">ตกแต่งห้อง 🎨</span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => {

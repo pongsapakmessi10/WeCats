@@ -22,6 +22,7 @@ import {
   broadcastLiveFriendRequest,
   broadcastLiveFriendAccepted,
   broadcastLiveDirectMessage,
+  broadcastLiveCondoUpdate,
 } from '@/game/multiplayer/broadcast';
 import {
   broadcastCrossTabChat,
@@ -254,6 +255,15 @@ export const PLAZA_PROPS: InteractiveProp[] = [
   },
 ];
 
+export const normalizeRoomId = (id?: string) => {
+  if (!id) return 'public-sakura';
+  try {
+    return decodeURIComponent(id).trim().toLowerCase().replace(/^presence-/, '');
+  } catch {
+    return id.trim().toLowerCase().replace(/^presence-/, '');
+  }
+};
+
 function loadInitialChatHistory(): Record<string, ChatMessage[]> {
   const defaultHistory: Record<string, ChatMessage[]> = {
     'public-sakura': [
@@ -284,8 +294,21 @@ function loadInitialChatHistory(): Record<string, ChatMessage[]> {
 function saveChatHistory(history: Record<string, ChatMessage[]>) {
   if (typeof window !== 'undefined') {
     try {
+      const roomKeys = Object.keys(history);
+      // Keep at most 15 most active rooms to prevent storage bloat
+      let targetKeys = roomKeys;
+      if (roomKeys.length > 15) {
+        targetKeys = roomKeys
+          .sort((a, b) => {
+            const aLast = history[a]?.[history[a].length - 1]?.timestamp || 0;
+            const bLast = history[b]?.[history[b].length - 1]?.timestamp || 0;
+            return bLast - aLast;
+          })
+          .slice(0, 15);
+      }
+
       const pruned: Record<string, ChatMessage[]> = {};
-      Object.keys(history).forEach((roomId) => {
+      targetKeys.forEach((roomId) => {
         pruned[roomId] = (history[roomId] || []).slice(-60);
       });
       localStorage.setItem('wecats_chat_history_by_room', JSON.stringify(pruned));
@@ -404,7 +427,7 @@ interface CatStoreState {
   allogroomCat: (targetId: string) => void;
   sendChatMessage: (text: string) => void;
   sendEmote: (emote: string) => void;
-  receiveChatMessage: (senderId: string, senderName: string, text: string, roomId?: string) => void;
+  receiveChatMessage: (senderId: string, senderName: string, text: string, roomId?: string, msgId?: string) => void;
   syncCrossTabChatMessage: (roomId: string, message: ChatMessage) => void;
   syncCrossTabRoom: (room: RoomData) => void;
   syncCrossTabStats: (stats: CatStats, fishCoins?: number, unlockedItems?: string[]) => void;
@@ -526,19 +549,20 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       } catch {}
     }
 
+    const normId = normalizeRoomId(room.id);
     const currentByRoom = { ...get().chatMessagesByRoom };
-    if (!currentByRoom[room.id]) {
-      currentByRoom[room.id] = [
+    if (!currentByRoom[normId] && !currentByRoom[room.id]) {
+      currentByRoom[normId] = [
         {
           id: `msg-welcome-${room.id}`,
           senderId: 'system',
           senderName: 'ระบบ WeCats',
-          text: `ยินดีต้อนรับสู่ห้อง "${room.name}"! แชทสดและส่ง Emote เฉพาะในห้องนี้ได้เลย 🐾✨`,
+          text: `ยินดีต้อนรับสู่ ${room.name}! แชทสดและส่ง Emote ได้เลย 🐾✨`,
           timestamp: Date.now(),
         },
       ];
     }
-    const activeMessages = currentByRoom[room.id] || [];
+    const activeMessages = currentByRoom[normId] || currentByRoom[room.id] || [];
 
     set({
       currentRoom: room,
@@ -548,7 +572,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       chatMessages: activeMessages,
       unreadChatCount: 0,
     });
-    get().setNotification(`ย้ายเข้าสู่ห้อง "${room.name}" สำเร็จ! 🐾`);
+    get().setNotification(`ย้ายเข้าสู่ "${room.name}" สำเร็จ! 🐾`);
 
     // Sync room switch across other tabs of the same account
     broadcastCrossTabRoom(room);
@@ -559,8 +583,9 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
     if (room.theme === 'moonlight') timeOfDay = 'night';
     else if (room.theme === 'sunshine') timeOfDay = 'afternoon';
 
+    const normId = normalizeRoomId(room.id);
     const currentByRoom = { ...get().chatMessagesByRoom };
-    const activeMessages = currentByRoom[room.id] || [];
+    const activeMessages = currentByRoom[normId] || currentByRoom[room.id] || [];
 
     set({
       currentRoom: room,
@@ -652,11 +677,15 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
           localStorage.setItem('wecats_my_condo', JSON.stringify(updated));
         } catch {}
       }
-      // If currently in self condo, update currentRoom config as well
-      const updatedRoom =
-        state.currentRoom.type === 'condo' && state.currentRoom.ownerName === state.myCat.name
-          ? { ...state.currentRoom, condoConfig: updated }
-          : state.currentRoom;
+      // If currently in self condo, update currentRoom config as well and broadcast to visitors
+      const isSelfCondo = state.currentRoom.type === 'condo' && state.currentRoom.ownerName === state.myCat.name;
+      const updatedRoom = isSelfCondo
+        ? { ...state.currentRoom, condoConfig: updated }
+        : state.currentRoom;
+
+      if (isSelfCondo) {
+        broadcastLiveCondoUpdate(updated);
+      }
 
       return {
         myCondo: updated,
@@ -665,13 +694,14 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
     }),
   enterMyCondo: () => {
     const { myCat, myCondo, setCurrentRoom, setNotification } = get();
+    const cleanName = myCat.name.trim();
     const condoRoom: RoomData = {
-      id: `condo-${myCat.name.toLowerCase().replace(/\s+/g, '_')}`,
-      name: `คอนโดของ ${myCat.name} 🏡`,
+      id: `condo-${cleanName.toLowerCase().replace(/\s+/g, '_')}`,
+      name: `คอนโดของ ${cleanName} 🏡`,
       type: 'condo',
       theme: 'condo',
       maxCapacity: 10,
-      ownerName: myCat.name,
+      ownerName: cleanName,
       condoConfig: myCondo,
     };
     setCurrentRoom(condoRoom);
@@ -682,18 +712,36 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
         })
       );
     }
-    setNotification(`ยินดีต้อนรับกลับบ้าน "${myCat.name}"! 🏡🛋️✨`);
+    setNotification(`ยินดีต้อนรับกลับบ้าน "${cleanName}"! 🏡🛋️✨`);
   },
   visitFriendCondo: (friendCatName, config) => {
     const { setCurrentRoom, setNotification } = get();
+    const cleanName = friendCatName.trim();
+    const roomKey = `condo-${cleanName.toLowerCase().replace(/\s+/g, '_')}`;
+
+    let resolvedConfig = config;
+    if (!resolvedConfig && typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(`wecats_condo_cfg_${roomKey}`);
+        if (cached) resolvedConfig = JSON.parse(cached);
+      } catch {}
+    }
+    if (!resolvedConfig) resolvedConfig = DEFAULT_CONDO;
+
+    if (config && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`wecats_condo_cfg_${roomKey}`, JSON.stringify(config));
+      } catch {}
+    }
+
     const condoRoom: RoomData = {
-      id: `condo-${friendCatName.toLowerCase().replace(/\s+/g, '_')}`,
-      name: `บ้านของ ${friendCatName} 🏡`,
+      id: roomKey,
+      name: `คอนโดของ ${cleanName} 🏡`,
       type: 'condo',
       theme: 'condo',
       maxCapacity: 10,
-      ownerName: friendCatName,
-      condoConfig: config || DEFAULT_CONDO,
+      ownerName: cleanName,
+      condoConfig: resolvedConfig,
     };
     setCurrentRoom(condoRoom);
     if (typeof window !== 'undefined') {
@@ -703,7 +751,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
         })
       );
     }
-    setNotification(`วาร์ปมาถึงบ้านของ "${friendCatName}" แล้ว! 🏡🎉`);
+    setNotification(`วาร์ปมาถึงคอนโดของ "${cleanName}" แล้ว! 🏡🎉`);
   },
   exitCondoToPlaza: () => {
     const { setCurrentRoom, setNotification } = get();
@@ -924,6 +972,8 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
 
   sendDirectMessage: (friendId, text) => {
     const myCat = get().myCat;
+    const friend = get().friends.find((f) => f.id === friendId);
+    const targetCatName = friend?.catName || friend?.username;
     const dm: DirectMessage = {
       id: `dm-${Date.now()}`,
       fromPeerId: 'self',
@@ -933,7 +983,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       timestamp: Date.now(),
     };
 
-    broadcastLiveDirectMessage(friendId, text);
+    broadcastLiveDirectMessage(friendId, text, targetCatName);
     broadcastCrossTabDM(friendId, dm);
 
     set((state) => ({
@@ -1307,7 +1357,8 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   },
 
   sendChatMessage: (text) => {
-    const roomId = get().currentRoom.id;
+    const rawRoomId = get().currentRoom.id;
+    const normId = normalizeRoomId(rawRoomId);
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderId: 'self',
@@ -1316,10 +1367,10 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       timestamp: Date.now(),
     };
     set((state) => {
-      const roomMsgs = [...(state.chatMessagesByRoom[roomId] || []), newMsg];
+      const roomMsgs = [...(state.chatMessagesByRoom[normId] || state.chatMessagesByRoom[rawRoomId] || []), newMsg];
       const updatedByRoom = {
         ...state.chatMessagesByRoom,
-        [roomId]: roomMsgs,
+        [normId]: roomMsgs,
       };
       saveChatHistory(updatedByRoom);
 
@@ -1331,7 +1382,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
     });
 
     // Real-time broadcast to other tabs of the same browser
-    broadcastCrossTabChat(roomId, newMsg);
+    broadcastCrossTabChat(normId, newMsg);
 
     setTimeout(() => {
       set({ myCatChat: { text: null, emote: null } });
@@ -1339,7 +1390,8 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   },
 
   sendEmote: (emote) => {
-    const roomId = get().currentRoom.id;
+    const rawRoomId = get().currentRoom.id;
+    const normId = normalizeRoomId(rawRoomId);
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderId: 'self',
@@ -1349,10 +1401,10 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       isEmote: true,
     };
     set((state) => {
-      const roomMsgs = [...(state.chatMessagesByRoom[roomId] || []), newMsg];
+      const roomMsgs = [...(state.chatMessagesByRoom[normId] || state.chatMessagesByRoom[rawRoomId] || []), newMsg];
       const updatedByRoom = {
         ...state.chatMessagesByRoom,
-        [roomId]: roomMsgs,
+        [normId]: roomMsgs,
       };
       saveChatHistory(updatedByRoom);
 
@@ -1364,31 +1416,46 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
     });
 
     // Real-time broadcast to other tabs of the same browser
-    broadcastCrossTabChat(roomId, newMsg);
+    broadcastCrossTabChat(normId, newMsg);
 
     setTimeout(() => {
       set({ myCatChat: { text: null, emote: null } });
     }, 4500);
   },
 
-  receiveChatMessage: (senderId, senderName, text, targetRoomId) => {
-    const roomId = targetRoomId || get().currentRoom.id;
-    const newMsg: ChatMessage = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      senderId,
-      senderName,
-      text,
-      timestamp: Date.now(),
-    };
+  receiveChatMessage: (senderId, senderName, text, targetRoomId, explicitMsgId) => {
+    const rawTarget = targetRoomId || get().currentRoom.id;
+    const normId = normalizeRoomId(rawTarget);
+    const currentNorm = normalizeRoomId(get().currentRoom.id);
+    const messageId = explicitMsgId || `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const now = Date.now();
+
     set((state) => {
-      const roomMsgs = [...(state.chatMessagesByRoom[roomId] || []), newMsg];
+      const existingInRoom = state.chatMessagesByRoom[normId] || state.chatMessagesByRoom[rawTarget] || state.chatMessages || [];
+
+      // Deduplication: check if message with same ID already exists, or same sender & text within last 2000ms
+      const isDuplicate = existingInRoom.some(
+        (m) => m.id === messageId || (m.senderId === senderId && m.text === text && now - m.timestamp < 2000)
+      );
+
+      if (isDuplicate) return state;
+
+      const newMsg: ChatMessage = {
+        id: messageId,
+        senderId,
+        senderName,
+        text,
+        timestamp: now,
+      };
+
+      const roomMsgs = [...existingInRoom, newMsg];
       const updatedByRoom = {
         ...state.chatMessagesByRoom,
-        [roomId]: roomMsgs,
+        [normId]: roomMsgs,
       };
       saveChatHistory(updatedByRoom);
 
-      const isCurrent = state.currentRoom.id === roomId;
+      const isCurrent = normId === currentNorm || !targetRoomId;
       const isExpanded = state.isChatExpanded;
       const newUnread = isCurrent && !isExpanded ? state.unreadChatCount + 1 : state.unreadChatCount;
 
@@ -1401,18 +1468,20 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   },
 
   syncCrossTabChatMessage: (roomId, msg) => {
+    const normId = normalizeRoomId(roomId);
+    const currentNorm = normalizeRoomId(get().currentRoom.id);
     set((state) => {
-      const existingMsgs = state.chatMessagesByRoom[roomId] || [];
+      const existingMsgs = state.chatMessagesByRoom[normId] || state.chatMessagesByRoom[roomId] || [];
       if (existingMsgs.some((m) => m.id === msg.id)) return state;
 
       const roomMsgs = [...existingMsgs, msg];
       const updatedByRoom = {
         ...state.chatMessagesByRoom,
-        [roomId]: roomMsgs,
+        [normId]: roomMsgs,
       };
       saveChatHistory(updatedByRoom);
 
-      const isCurrent = state.currentRoom.id === roomId;
+      const isCurrent = normId === currentNorm;
       return {
         chatMessagesByRoom: updatedByRoom,
         chatMessages: isCurrent ? roomMsgs : state.chatMessages,
@@ -1444,19 +1513,13 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       const raw = typeof catsOrUpdater === 'function' ? catsOrUpdater(state.onlineCats) : catsOrUpdater;
       if (!Array.isArray(raw)) return state;
 
-      const myName = state.myCat.name;
       const seen = new Set<string>();
       const deduplicated: OnlineCat[] = [];
 
       for (const cat of raw) {
         if (!cat || !cat.id) continue;
-        const catName = cat.customization?.name;
-        // Exclude own cat
-        if (catName && catName === myName) continue;
-
-        const uniqueKey = catName || cat.id;
-        if (!seen.has(uniqueKey)) {
-          seen.add(uniqueKey);
+        if (!seen.has(cat.id)) {
+          seen.add(cat.id);
           deduplicated.push(cat);
         }
       }

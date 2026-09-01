@@ -432,10 +432,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
   const exitCondoToPlaza = useCatStore((state) => state.exitCondoToPlaza);
   const currentRoom = useCatStore((state) => state.currentRoom);
   const cameraZoomRef = useRef(cameraZoomMode);
+  const myCatChatRef = useRef(myCatChat);
+  const lastCrossTabSyncRef = useRef<number>(0);
 
   useEffect(() => {
     cameraZoomRef.current = cameraZoomMode;
   }, [cameraZoomMode]);
+
+  useEffect(() => {
+    myCatChatRef.current = myCatChat;
+  }, [myCatChat]);
 
   // Canvas Dimensions (responsive to window size)
   const [dimensions, setDimensions] = useState({ width: 1400, height: 900 });
@@ -739,9 +745,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
         isZooming ? 'zoomies' : isMoving ? 'walking' : 'idle'
       );
 
-      // Broadcast position to other tabs for immediate sync
+      // Broadcast position to other tabs for immediate sync (throttled at 80ms)
       if (isMoving) {
-        broadcastCrossTabPos(playerPosRef.current.x, playerPosRef.current.y, playerPosRef.current.dir, isMoving);
+        if (currentTime - lastCrossTabSyncRef.current >= 80) {
+          lastCrossTabSyncRef.current = currentTime;
+          broadcastCrossTabPos(playerPosRef.current.x, playerPosRef.current.y, playerPosRef.current.dir, isMoving);
+        }
       }
 
       // 2. Proximity Detection for Props
@@ -848,8 +857,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
             timeMs: currentTime,
             isMoving,
             showNameTag: true,
-            emote: myCatChat.emote,
-            chatMessage: myCatChat.text,
+            emote: myCatChatRef.current.emote,
+            chatMessage: myCatChatRef.current.text,
           });
         } else {
           const oc = entity.catData as OnlineCat;

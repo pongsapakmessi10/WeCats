@@ -4,8 +4,10 @@ import { broadcastP2PPacket } from './p2pManager';
 export async function broadcastLiveChat(text?: string, emote?: string) {
   const myCat = useCatStore.getState().myCat;
   const currentRoom = useCatStore.getState().currentRoom;
+  const msgId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   broadcastP2PPacket({
     type: 'cat-chat',
+    msgId,
     roomId: currentRoom.id,
     text,
     emote,
@@ -37,13 +39,14 @@ export async function broadcastLiveFriendAccepted(targetPeerId: string) {
   });
 }
 
-export async function broadcastLiveDirectMessage(targetPeerId: string, text: string) {
+export async function broadcastLiveDirectMessage(targetPeerId: string, text: string, targetCatName?: string) {
   const myCat = useCatStore.getState().myCat;
   const currentRoom = useCatStore.getState().currentRoom;
   broadcastP2PPacket({
     type: 'direct-message',
     roomId: currentRoom.id,
     toPeerId: targetPeerId,
+    targetCatName,
     text,
     senderName: myCat.name,
   });
@@ -57,5 +60,14 @@ export async function broadcastLiveFriendAction(actionType: 'request' | 'treat')
     roomId: currentRoom.id,
     actionType,
     senderName: myCat.name,
+  });
+}
+
+export async function broadcastLiveCondoUpdate(condoConfig: any) {
+  const currentRoom = useCatStore.getState().currentRoom;
+  broadcastP2PPacket({
+    type: 'condo-update',
+    roomId: currentRoom.id,
+    condoConfig,
   });
 }
