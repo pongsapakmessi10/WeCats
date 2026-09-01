@@ -70,7 +70,7 @@ export const QuickCareDock: React.FC = () => {
       )}
 
       {/* Main Dock Buttons */}
-      <div className="bg-white/90 backdrop-blur-md px-5 py-2.5 rounded-full border-3 border-[#ebd9c8] shadow-2xl flex items-center gap-2 sm:gap-3">
+      <div className="bg-white/95 backdrop-blur-md px-2.5 py-1.5 sm:px-5 sm:py-2.5 rounded-full border-2 sm:border-3 border-[#ebd9c8] shadow-2xl flex items-center gap-1.5 sm:gap-3">
         
         {/* 1. Feed Button */}
         <button
@@ -78,9 +78,10 @@ export const QuickCareDock: React.FC = () => {
             soundManager.playPop();
             setShowFoodSubmenu(!showFoodSubmenu);
           }}
-          className="btn-jelly flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#ffcad4] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32]"
+          className="btn-jelly flex items-center gap-1.5 p-2 sm:px-3.5 sm:py-2 rounded-full bg-[#ffcad4] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32]"
+          title="ให้อาหาร"
         >
-          <FoodBowlIcon size={18} />
+          <FoodBowlIcon size={16} />
           <span className="hidden sm:inline">ให้อาหาร</span>
         </button>
 
@@ -90,9 +91,10 @@ export const QuickCareDock: React.FC = () => {
             soundManager.playWater();
             waterCat();
           }}
-          className="btn-jelly flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#bde0fe] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32]"
+          className="btn-jelly flex items-center gap-1.5 p-2 sm:px-3.5 sm:py-2 rounded-full bg-[#bde0fe] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32]"
+          title="ให้น้ำ"
         >
-          <WaterDropIcon size={18} />
+          <WaterDropIcon size={16} />
           <span className="hidden sm:inline">ให้น้ำ</span>
         </button>
 
@@ -102,9 +104,10 @@ export const QuickCareDock: React.FC = () => {
             soundManager.playPurr();
             groomCat();
           }}
-          className="btn-jelly flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#caeedf] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32]"
+          className="btn-jelly flex items-center gap-1.5 p-2 sm:px-3.5 sm:py-2 rounded-full bg-[#caeedf] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32]"
+          title="แปรงขน"
         >
-          <GroomBrushIcon size={18} />
+          <GroomBrushIcon size={16} />
           <span className="hidden sm:inline">แปรงขน</span>
         </button>
 
@@ -120,9 +123,10 @@ export const QuickCareDock: React.FC = () => {
             });
             petCat();
           }}
-          className="btn-jelly flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#ffe494] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32]"
+          className="btn-jelly flex items-center gap-1.5 p-2 sm:px-3.5 sm:py-2 rounded-full bg-[#ffe494] border-2 border-[#523e32] text-xs font-fredoka font-bold text-[#523e32]"
+          title="ลูบหัว"
         >
-          <PetHeartIcon size={18} />
+          <PetHeartIcon size={16} />
           <span className="hidden sm:inline">ลูบหัว</span>
         </button>
 
@@ -133,9 +137,10 @@ export const QuickCareDock: React.FC = () => {
             soundManager.playSparkle();
             triggerZoomies();
           }}
-          className="btn-jelly flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#ff758f] border-2 border-[#523e32] text-xs font-fredoka font-bold text-white shadow-md animate-pulse"
+          className="btn-jelly flex items-center gap-1.5 p-2 sm:px-3.5 sm:py-2 rounded-full bg-[#ff758f] border-2 border-[#523e32] text-xs font-fredoka font-bold text-white shadow-md animate-pulse"
+          title="Zoomies!"
         >
-          <LaserZapIcon size={18} />
+          <LaserZapIcon size={16} />
           <span className="hidden sm:inline">Zoomies!</span>
         </button>
       </div>

@@ -281,10 +281,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       const cw = canvas.width;
       const ch = canvas.height;
 
-      // Calculate Uniform Scaling Matrix to fit/center the fixed virtual world on any screen
-      const scale = Math.min(cw / WORLD_WIDTH, ch / WORLD_HEIGHT);
-      const offsetX = (cw - WORLD_WIDTH * scale) / 2;
-      const offsetY = (ch - WORLD_HEIGHT * scale) / 2;
+      // Calculate Uniform Scaling Matrix with mobile portrait camera zoom
+      const isPortrait = ch > cw;
+      const zoomMultiplier = isPortrait ? 1.3 : 1;
+      const baseScale = Math.min(cw / WORLD_WIDTH, ch / WORLD_HEIGHT);
+      const scale = baseScale * zoomMultiplier;
+
+      let offsetX = (cw - WORLD_WIDTH * scale) / 2;
+      let offsetY = (ch - WORLD_HEIGHT * scale) / 2;
+
+      if (isPortrait) {
+        const targetOffsetX = cw / 2 - playerPosRef.current.x * scale;
+        const minOffsetX = cw - WORLD_WIDTH * scale;
+        const maxOffsetX = 0;
+        offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, targetOffsetX));
+      }
 
       // 1. Process Player Movement (in World Coordinates)
       const keys = keysRef.current;
@@ -548,9 +559,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
 
     const cw = canvas.width;
     const ch = canvas.height;
-    const scale = Math.min(cw / WORLD_WIDTH, ch / WORLD_HEIGHT);
-    const offsetX = (cw - WORLD_WIDTH * scale) / 2;
-    const offsetY = (ch - WORLD_HEIGHT * scale) / 2;
+    const isPortrait = ch > cw;
+    const zoomMultiplier = isPortrait ? 1.3 : 1;
+    const baseScale = Math.min(cw / WORLD_WIDTH, ch / WORLD_HEIGHT);
+    const scale = baseScale * zoomMultiplier;
+
+    let offsetX = (cw - WORLD_WIDTH * scale) / 2;
+    let offsetY = (ch - WORLD_HEIGHT * scale) / 2;
+
+    if (isPortrait) {
+      const targetOffsetX = cw / 2 - playerPosRef.current.x * scale;
+      const minOffsetX = cw - WORLD_WIDTH * scale;
+      const maxOffsetX = 0;
+      offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, targetOffsetX));
+    }
 
     const screenX = (e.clientX - rect.left) * (cw / rect.width);
     const screenY = (e.clientY - rect.top) * (ch / rect.height);
@@ -591,9 +613,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
         className="w-full h-full block cursor-pointer select-none"
       />
 
-      {/* Proximity Interaction Floating Prompt */}
+      {/* Proximity Interaction Floating Prompt (Shown only on Desktop lg screens) */}
       {activeNearbyProp && (
-        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md px-6 py-3.5 rounded-full border-3 border-[#523e32] shadow-2xl flex items-center gap-3 animate-bounce z-20">
+        <div className="hidden lg:flex absolute bottom-28 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md px-6 py-3.5 rounded-full border-3 border-[#523e32] shadow-2xl items-center gap-3 animate-bounce z-20">
           <div className="w-10 h-10 rounded-2xl bg-[#fffbf0] border-2 border-[#523e32] flex items-center justify-center shadow-inner shrink-0">
             {activeNearbyProp.type === 'water_fountain' ? (
               <WaterDropIcon size={24} />
@@ -623,9 +645,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
         </div>
       )}
 
-      {/* Cat-to-Cat Interaction Prompt */}
+      {/* Cat-to-Cat Interaction Prompt (Shown only on Desktop lg screens) */}
       {selectedNearbyCat && !activeNearbyProp && (
-        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md px-6 py-3.5 rounded-full border-3 border-[#523e32] shadow-2xl flex items-center gap-4 animate-bounce z-20">
+        <div className="hidden lg:flex absolute bottom-28 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md px-6 py-3.5 rounded-full border-3 border-[#523e32] shadow-2xl items-center gap-4 animate-bounce z-20">
           <div className="w-10 h-10 rounded-2xl bg-[#caeedf] border-2 border-[#523e32] flex items-center justify-center shadow-inner shrink-0">
             <CatPawIcon size={24} color="#523e32" />
           </div>

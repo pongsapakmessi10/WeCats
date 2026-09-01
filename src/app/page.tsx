@@ -240,8 +240,8 @@ export default function Home() {
               <ChatAndEmoteBox />
             </div>
 
-            {/* Center: Quick Care Dock */}
-            <div className="flex-1 flex justify-center pb-1 pointer-events-auto">
+            {/* Center: Quick Care Dock (Elevated on mobile above joystick & action button) */}
+            <div className="flex-1 flex justify-center mb-28 lg:mb-1 pointer-events-auto">
               <QuickCareDock />
             </div>
 
