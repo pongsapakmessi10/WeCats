@@ -42,15 +42,26 @@ export class CatRenderer {
     const flipX = isFacingLeft ? -1 : 1;
     ctx.scale(flipX * scale, scale);
 
-    // Animation Timers
-    const t = timeMs / 1000;
-    const walkSpeed = stats?.isZooming ? 20 : isMoving ? 10 : 0;
-    const walkCycle = Math.sin(t * walkSpeed);
-    const breatheCycle = Math.sin(t * 3) * 1.5;
-    const tailSwing = Math.sin(t * (stats?.isZooming ? 14 : 4)) * 0.35;
-    const blinkCycle = Math.sin(t * 1.5) > 0.96;
+    // Behavior Flags
+    const isDrinking = behavior === 'drinking';
+    const isEating = behavior === 'eating';
+    const isGrooming = behavior === 'grooming';
+    const isSleeping = behavior === 'sleeping';
+    const isScratching = behavior === 'scratching';
+    const isAllogrooming = behavior === 'allogrooming';
+    const isZooming = behavior === 'zoomies' || stats?.isZooming || false;
 
-    // Body dimensions based on body type
+    // Animation Timers & Rates
+    const t = timeMs / 1000;
+    const walkSpeed = isZooming ? 20 : isMoving ? 10 : isDrinking ? 14 : isEating ? 10 : isScratching ? 16 : isGrooming ? 6 : 0;
+    const walkCycle = Math.sin(t * walkSpeed);
+    const breatheCycle = isSleeping ? Math.sin(t * 1.8) * 2.5 : Math.sin(t * 3) * 1.5;
+    let tailSwing = Math.sin(t * (isZooming ? 14 : isEating ? 12 : isDrinking ? 4 : 4)) * (isEating ? 0.45 : isDrinking ? 0.2 : 0.35);
+    if (isSleeping) tailSwing = -0.3; // Curled tight
+    if (isScratching) tailSwing = -0.7 + Math.sin(t * 6) * 0.15; // Raised high
+    const blinkCycle = isSleeping ? false : Math.sin(t * 1.5) > 0.96;
+
+    // Body dimensions based on body type & behavior
     let bodyWidth = 36;
     let bodyHeight = 28;
     let legHeight = 12;
@@ -66,10 +77,17 @@ export class CatRenderer {
       bodyHeight = 24;
     }
 
+    if (isSleeping) {
+      bodyWidth += 8; // Cat Loaf expansion
+      bodyHeight -= 2;
+    } else if (isScratching) {
+      bodyHeight += 6; // Stretch tall
+    }
+
     // 0. Soft Ground Shadow
     ctx.beginPath();
-    ctx.ellipse(0, 18, (bodyWidth / 2) + 6, 8, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(82, 62, 50, 0.22)';
+    ctx.ellipse(0, isSleeping ? 16 : 18, (bodyWidth / 2) + (isSleeping ? 8 : 6), isSleeping ? 10 : 8, 0, 0, Math.PI * 2);
+    ctx.fillStyle = isSleeping ? 'rgba(82, 62, 50, 0.26)' : 'rgba(82, 62, 50, 0.22)';
     ctx.fill();
 
     // 1. AURA EFFECT (Behind Cat)
@@ -78,7 +96,7 @@ export class CatRenderer {
     }
 
     // 2. TAIL (Behind Body)
-    this.renderTail(ctx, custom, tailSwing, bodyWidth, bodyHeight);
+    this.renderTail(ctx, custom, tailSwing, bodyWidth, bodyHeight, behavior);
 
     // 3. BACK ACCESSORY (e.g. Angel Wings, Backpack)
     if (custom.accessoryBack !== 'none') {
@@ -86,11 +104,13 @@ export class CatRenderer {
     }
 
     // 4. BACK LEGS
-    this.renderLegs(ctx, custom, walkCycle, bodyWidth, legHeight, true);
+    this.renderLegs(ctx, custom, walkCycle, bodyWidth, legHeight, true, behavior, t);
 
     // 5. CAT BODY (Spine & Torso)
+    const purrTremor = isAllogrooming ? Math.sin(t * 35) * 0.5 : 0;
+    const torsoY = isDrinking ? 4 : isEating ? 3 : isSleeping ? 3 : isScratching ? -5 : -breatheCycle * 0.5;
     ctx.save();
-    ctx.translate(0, -breatheCycle * 0.5);
+    ctx.translate(purrTremor, torsoY);
 
     // Torso Base
     ctx.beginPath();
@@ -114,17 +134,39 @@ export class CatRenderer {
     ctx.restore();
 
     // 6. FRONT LEGS
-    this.renderLegs(ctx, custom, walkCycle, bodyWidth, legHeight, false);
+    this.renderLegs(ctx, custom, walkCycle, bodyWidth, legHeight, false, behavior, t);
 
     // 7. CAT HEAD & EARS & FACE
     ctx.save();
-    const headBob = isMoving ? Math.abs(Math.sin(t * walkSpeed)) * 3 : breatheCycle * 0.7;
-    const headTilt = (direction === 'up' ? -0.1 : direction === 'down' ? 0.05 : 0) + (isMoving ? walkCycle * 0.05 : 0);
-    ctx.translate(0, -18 - headBob);
+    let headBob = isMoving ? Math.abs(Math.sin(t * walkSpeed)) * 3 : breatheCycle * 0.7;
+    let headYOffset = -18 - headBob;
+    let headTilt = (direction === 'up' ? -0.1 : direction === 'down' ? 0.05 : 0) + (isMoving ? walkCycle * 0.05 : 0);
+
+    if (isDrinking) {
+      headYOffset = -8 + Math.sin(t * 14) * 2; // Head down lapping water
+      headTilt = 0.28;
+    } else if (isEating) {
+      headYOffset = -9 + Math.sin(t * 9) * 2.2; // Head in bowl chewing
+      headTilt = 0.22;
+    } else if (isGrooming) {
+      headYOffset = -14;
+      headTilt = -0.25; // Tilt toward raised paw
+    } else if (isSleeping) {
+      headYOffset = -11 + (breatheCycle * 0.3); // Resting on floor
+      headTilt = 0.06;
+    } else if (isScratching) {
+      headYOffset = -25; // Reaching up scratching post
+      headTilt = -0.12;
+    } else if (isAllogrooming) {
+      headYOffset = -22; // Head tilted back enjoying pets
+      headTilt = -0.22;
+    }
+
+    ctx.translate(purrTremor, headYOffset);
     ctx.rotate(headTilt);
 
     // EARS
-    this.renderEars(ctx, custom, t);
+    this.renderEars(ctx, custom, t, behavior);
 
     // HEAD BASE
     const headRadius = 22;
@@ -140,7 +182,7 @@ export class CatRenderer {
     this.renderHeadPattern(ctx, custom, headRadius);
 
     // FACE DETAILS (Eyes, Snout, Whiskers, Blush)
-    this.renderFace(ctx, custom, blinkCycle, t, direction);
+    this.renderFace(ctx, custom, blinkCycle, t, direction, behavior);
 
     // NECK ACCESSORY (Gold Bell, Bowtie, Ribbon)
     if (custom.accessoryNeck !== 'none') {
@@ -159,6 +201,9 @@ export class CatRenderer {
 
     ctx.restore(); // Head restore
 
+    // 7.5 Signature Behavioral Particles (Water, crumbs, Zzz, hearts)
+    this.renderBehavioralParticles(ctx, behavior, t);
+
     ctx.restore(); // Root cat transform restore
 
     // 8. HUD LABELS: Name Tag, Emotes, Chat Speech Bubble (Unflipped & Unscaled)
@@ -169,12 +214,24 @@ export class CatRenderer {
 
   // --- SUB RENDERERS ---
 
-  private static renderTail(ctx: CanvasRenderingContext2D, custom: CatCustomization, swing: number, bw: number, bh: number) {
+  private static renderTail(
+    ctx: CanvasRenderingContext2D,
+    custom: CatCustomization,
+    swing: number,
+    bw: number,
+    bh: number,
+    behavior: CatBehavior = 'idle'
+  ) {
     ctx.save();
     const tailStartX = -bw / 2.2;
     const tailStartY = 4;
     ctx.translate(tailStartX, tailStartY);
-    ctx.rotate(-0.6 + swing);
+
+    let baseAngle = -0.6;
+    if (behavior === 'sleeping') baseAngle = -1.1; // Curled around body
+    if (behavior === 'scratching') baseAngle = -1.35; // Question mark tail pointing up
+
+    ctx.rotate(baseAngle + swing);
 
     ctx.lineWidth = custom.tailType === 'fluffy' ? 10 : 6;
     ctx.lineCap = 'round';
@@ -187,6 +244,10 @@ export class CatRenderer {
     } else if (custom.tailType === 'kinked') {
       ctx.lineTo(-12, -14);
       ctx.lineTo(-8, -26);
+    } else if (behavior === 'scratching') {
+      // Question mark curve
+      ctx.quadraticCurveTo(-14, -20, -4, -34);
+      ctx.quadraticCurveTo(4, -36, 6, -30);
     } else {
       ctx.quadraticCurveTo(-18, -14, -8, -32);
     }
@@ -214,11 +275,96 @@ export class CatRenderer {
     walkCycle: number,
     bw: number,
     legH: number,
-    isBackLayer: boolean
+    isBackLayer: boolean,
+    behavior: CatBehavior = 'idle',
+    t: number = 0
   ) {
     const legWidth = 7;
     const offset = isBackLayer ? -10 : 8;
     const animOffset = isBackLayer ? -walkCycle * 5 : walkCycle * 5;
+
+    // 1. SPECIAL CASE: SLEEPING (Cat Loaf Paws 🍞)
+    if (behavior === 'sleeping') {
+      if (isBackLayer) return; // Hidden under body
+      ctx.save();
+      ctx.fillStyle = custom.pawColor || custom.baseColor;
+      ctx.strokeStyle = '#4a3b32';
+      ctx.lineWidth = 2;
+      // Two cute tucked paws resting under chest
+      ctx.beginPath();
+      ctx.ellipse(-bw / 3.8, 12, 6, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(bw / 3.8, 12, 6, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    // 2. SPECIAL CASE: GROOMING (One paw raised near face)
+    if (behavior === 'grooming') {
+      ctx.save();
+      ctx.fillStyle = custom.pawColor || custom.baseColor;
+      ctx.strokeStyle = '#4a3b32';
+      ctx.lineWidth = 2;
+      if (isBackLayer) {
+        // Folded hind legs sitting
+        ctx.beginPath();
+        ctx.roundRect(-bw / 3 - 8, 8, legWidth, legH * 0.8, 4);
+        ctx.roundRect(bw / 4 - 8, 8, legWidth, legH * 0.8, 4);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        // Right paw on ground
+        ctx.beginPath();
+        ctx.roundRect(bw / 4 + 4, 8, legWidth, legH * 0.9, 4);
+        ctx.fill();
+        ctx.stroke();
+        // Left paw raised up near cheek licking
+        const lickBob = Math.sin(t * 8) * 2.5;
+        ctx.beginPath();
+        ctx.roundRect(-bw / 3 + 2, -6 + lickBob, legWidth, legH * 1.25, 4);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
+
+    // 3. SPECIAL CASE: SCRATCHING (Standing tall on hind legs & clawing)
+    if (behavior === 'scratching') {
+      ctx.save();
+      ctx.fillStyle = custom.pawColor || custom.baseColor;
+      ctx.strokeStyle = '#4a3b32';
+      ctx.lineWidth = 2;
+      if (isBackLayer) {
+        // Hind legs standing tall
+        ctx.beginPath();
+        ctx.roundRect(-bw / 3, 6, legWidth, legH * 1.3, 4);
+        ctx.roundRect(bw / 4, 6, legWidth, legH * 1.3, 4);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        // Front paws alternate clawing up and down
+        const claw1 = Math.sin(t * 16) * 5;
+        const claw2 = -claw1;
+        ctx.beginPath();
+        ctx.roundRect(-bw / 3 + 4, -14 + claw1, legWidth, legH * 1.3, 4);
+        ctx.roundRect(bw / 4 + 4, -14 + claw2, legWidth, legH * 1.3, 4);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
+
+    // 4. DRINKING & EATING (Front legs crouched lower)
+    let effLegH = legH;
+    if ((behavior === 'drinking' || behavior === 'eating') && !isBackLayer) {
+      effLegH = legH * 0.65;
+    }
 
     ctx.save();
     ctx.fillStyle = custom.pawColor || custom.baseColor;
@@ -227,26 +373,31 @@ export class CatRenderer {
 
     // Left leg
     ctx.beginPath();
-    ctx.roundRect(-bw / 3 + offset, 8 + animOffset, legWidth, legH, 4);
+    ctx.roundRect(-bw / 3 + offset, 8 + animOffset, legWidth, effLegH, 4);
     ctx.fill();
     ctx.stroke();
 
     // Right leg
     ctx.beginPath();
-    ctx.roundRect(bw / 4 + (offset * 0.5), 8 - animOffset, legWidth, legH, 4);
+    ctx.roundRect(bw / 4 + (offset * 0.5), 8 - animOffset, legWidth, effLegH, 4);
     ctx.fill();
     ctx.stroke();
 
     ctx.restore();
   }
 
-  private static renderEars(ctx: CanvasRenderingContext2D, custom: CatCustomization, t: number) {
+  private static renderEars(ctx: CanvasRenderingContext2D, custom: CatCustomization, t: number, behavior: CatBehavior = 'idle') {
+    const isAirplane = behavior === 'zoomies';
+    const isDrinking = behavior === 'drinking';
     const earTwitch = Math.sin(t * 5) > 0.9 ? 0.15 : 0;
+
+    const leftAngle = isAirplane ? -0.65 : isDrinking ? -0.4 : -0.25 + earTwitch;
+    const rightAngle = isAirplane ? 0.65 : isDrinking ? 0.4 : 0.25 - earTwitch;
 
     // Left Ear
     ctx.save();
     ctx.translate(-14, -14);
-    ctx.rotate(-0.25 + earTwitch);
+    ctx.rotate(leftAngle);
     ctx.beginPath();
     if (custom.earType === 'folded') {
       ctx.moveTo(-6, 8);
@@ -279,7 +430,7 @@ export class CatRenderer {
     // Right Ear
     ctx.save();
     ctx.translate(14, -14);
-    ctx.rotate(0.25 - earTwitch);
+    ctx.rotate(rightAngle);
     ctx.beginPath();
     if (custom.earType === 'folded') {
       ctx.moveTo(-8, 4);
@@ -315,9 +466,17 @@ export class CatRenderer {
     custom: CatCustomization,
     isBlinking: boolean,
     t: number,
-    dir: 'up' | 'down' | 'left' | 'right'
+    dir: 'up' | 'down' | 'left' | 'right',
+    behavior: CatBehavior = 'idle'
   ) {
     if (dir === 'up') return; // Head is seen from back when looking up
+
+    const isSleeping = behavior === 'sleeping';
+    const isGrooming = behavior === 'grooming';
+    const isBliss = behavior === 'allogrooming' || behavior === 'grooming';
+    const isDrinking = behavior === 'drinking';
+    const isEating = behavior === 'eating';
+    const isZooming = behavior === 'zoomies';
 
     // Snout Muzzle
     ctx.beginPath();
@@ -342,6 +501,28 @@ export class CatRenderer {
     ctx.strokeStyle = '#4a3b32';
     ctx.stroke();
 
+    // Cute Lapping Pink Tongue when Drinking or Grooming
+    if (isDrinking) {
+      const lap = Math.sin(t * 14);
+      if (lap > 0) {
+        ctx.beginPath();
+        ctx.ellipse(0, 8.5 + (lap * 3), 3, 3.5, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff758f';
+        ctx.fill();
+        ctx.strokeStyle = '#4a3b32';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    } else if (isGrooming) {
+      const lick = Math.sin(t * 8);
+      if (lick > 0) {
+        ctx.beginPath();
+        ctx.ellipse(-3, 7.5, 2.5, 3.5, -0.3, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff758f';
+        ctx.fill();
+      }
+    }
+
     // Whiskers
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = '#6c584c';
@@ -364,7 +545,33 @@ export class CatRenderer {
     const eyeSpacing = 10;
     const eyeY = -3;
 
-    if (isBlinking) {
+    if (isSleeping) {
+      // Sleeping straight serene eyes (- -)
+      ctx.beginPath();
+      ctx.moveTo(-eyeSpacing - 4, eyeY);
+      ctx.lineTo(-eyeSpacing + 4, eyeY);
+      ctx.moveTo(eyeSpacing - 4, eyeY);
+      ctx.lineTo(eyeSpacing + 4, eyeY);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#4a3b32';
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    } else if (isBliss) {
+      // Blissful curved happy eyes (⌒ ⌒) + Pink Blush
+      ctx.beginPath();
+      ctx.arc(-eyeSpacing, eyeY + 1, 4.5, 0.85 * Math.PI, 0.15 * Math.PI, true);
+      ctx.arc(eyeSpacing, eyeY + 1, 4.5, 0.85 * Math.PI, 0.15 * Math.PI, true);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#4a3b32';
+      ctx.stroke();
+
+      // Pink blush cheeks
+      ctx.beginPath();
+      ctx.ellipse(-eyeSpacing - 3, eyeY + 7, 4, 2.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(eyeSpacing + 3, eyeY + 7, 4, 2.5, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 117, 143, 0.55)';
+      ctx.fill();
+    } else if (isBlinking) {
       // Closed happy blink eyes (⌒ ⌒)
       ctx.beginPath();
       ctx.arc(-eyeSpacing, eyeY, 5, 0.9 * Math.PI, 0.1 * Math.PI, true);
@@ -373,6 +580,8 @@ export class CatRenderer {
       ctx.strokeStyle = '#4a3b32';
       ctx.stroke();
     } else {
+      const pupilRadius = isZooming ? 4.5 : 3;
+
       // Left Eye (Heterochromia Left)
       ctx.beginPath();
       ctx.ellipse(-eyeSpacing, eyeY, 5, 6, 0, 0, Math.PI * 2);
@@ -383,7 +592,7 @@ export class CatRenderer {
       ctx.stroke();
       // Pupil & Sparkle
       ctx.beginPath();
-      ctx.arc(-eyeSpacing + 0.5, eyeY, 3, 0, Math.PI * 2);
+      ctx.arc(-eyeSpacing + 0.5, eyeY, pupilRadius, 0, Math.PI * 2);
       ctx.fillStyle = '#1a1412';
       ctx.fill();
       ctx.beginPath();
@@ -401,7 +610,7 @@ export class CatRenderer {
       ctx.stroke();
       // Pupil & Sparkle
       ctx.beginPath();
-      ctx.arc(eyeSpacing - 0.5, eyeY, 3, 0, Math.PI * 2);
+      ctx.arc(eyeSpacing - 0.5, eyeY, pupilRadius, 0, Math.PI * 2);
       ctx.fillStyle = '#1a1412';
       ctx.fill();
       ctx.beginPath();
@@ -748,6 +957,137 @@ export class CatRenderer {
     ctx.textBaseline = 'middle';
     ctx.fillText(nameStr, 0, 4);
 
+    ctx.restore();
+  }
+
+  // --- SIGNATURE BEHAVIORAL PARTICLES ---
+
+  private static renderBehavioralParticles(
+    ctx: CanvasRenderingContext2D,
+    behavior: CatBehavior,
+    t: number
+  ) {
+    if (behavior === 'drinking') {
+      // 3 animated blue water droplets bouncing under mouth
+      for (let i = 0; i < 3; i++) {
+        const dropT = (t * 3.5 + i * 0.33) % 1;
+        const dropX = -6 + (i * 6) + Math.sin(t * 8 + i) * 2;
+        const dropY = 12 + dropT * 10;
+        const dropAlpha = 1 - dropT;
+        ctx.beginPath();
+        ctx.arc(dropX, dropY, 2.5 * (1 - dropT * 0.35), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(74, 189, 255, ${dropAlpha * 0.85})`;
+        ctx.fill();
+      }
+    } else if (behavior === 'eating') {
+      // 3 crunchy sparkle bits bouncing near mouth
+      for (let i = 0; i < 3; i++) {
+        const crumbT = (t * 3 + i * 0.33) % 1;
+        const crumbX = -8 + (i * 8) + Math.cos(t * 7 + i) * 3;
+        const crumbY = 10 - crumbT * 12;
+        const crumbAlpha = 1 - crumbT;
+        ctx.beginPath();
+        ctx.arc(crumbX, crumbY, 2, 0, Math.PI * 2);
+        ctx.fillStyle = i % 2 === 0 ? `rgba(255, 183, 3, ${crumbAlpha})` : `rgba(251, 133, 0, ${crumbAlpha})`;
+        ctx.fill();
+      }
+    } else if (behavior === 'grooming') {
+      // Clean sparkle stars drifting up
+      for (let i = 0; i < 2; i++) {
+        const spT = (t * 1.5 + i * 0.5) % 1;
+        const spX = -12 + (i * 24) + Math.sin(t * 3 + i) * 5;
+        const spY = -15 - spT * 22;
+        const spAlpha = Math.sin(spT * Math.PI);
+        this.renderMiniSparkle(ctx, spX, spY, 4.5, `rgba(255, 214, 10, ${spAlpha * 0.95})`);
+      }
+    } else if (behavior === 'sleeping') {
+      // Floating Zzz letters drifting diagonally in gentle sine wave
+      const zCycles = [0, 0.33, 0.66];
+      ctx.save();
+      ctx.font = 'bold 12px Fredoka, sans-serif';
+      ctx.textAlign = 'center';
+      zCycles.forEach((offset, idx) => {
+        const zT = (t * 0.6 + offset) % 1;
+        const zX = 14 + (zT * 20) + Math.sin(zT * Math.PI * 2) * 5;
+        const zY = -12 - (zT * 32);
+        const zAlpha = Math.sin(zT * Math.PI);
+        const zScale = 0.7 + idx * 0.25;
+        ctx.save();
+        ctx.translate(zX, zY);
+        ctx.scale(zScale, zScale);
+        ctx.fillStyle = `rgba(168, 140, 126, ${zAlpha * 0.9})`;
+        ctx.fillText('Z', 0, 0);
+        ctx.restore();
+      });
+      ctx.restore();
+    } else if (behavior === 'scratching') {
+      // Scratch sparks / wood dust
+      for (let i = 0; i < 3; i++) {
+        const scT = (t * 4.5 + i * 0.3) % 1;
+        const scX = 8 + Math.cos(t * 14 + i) * 6;
+        const scY = -18 + scT * 14;
+        const scAlpha = 1 - scT;
+        ctx.beginPath();
+        ctx.arc(scX, scY, 1.8, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(212, 163, 115, ${scAlpha})`;
+        ctx.fill();
+      }
+    } else if (behavior === 'allogrooming') {
+      // Floating pink hearts
+      for (let i = 0; i < 2; i++) {
+        const hT = (t * 1.2 + i * 0.5) % 1;
+        const hX = -6 + (i * 12) + Math.sin(t * 2 + i) * 4;
+        const hY = -28 - (hT * 22);
+        const hAlpha = Math.sin(hT * Math.PI);
+        const hSize = 5 + (1 - hT) * 2;
+        this.renderMiniHeart(ctx, hX, hY, hSize, `rgba(255, 117, 143, ${hAlpha * 0.9})`);
+      }
+    } else if (behavior === 'zoomies') {
+      // Dust clouds puffing behind paws
+      for (let i = 0; i < 2; i++) {
+        const dustT = (t * 5 + i * 0.5) % 1;
+        const dustX = -18 - dustT * 15;
+        const dustY = 16 + Math.sin(t * 10 + i) * 3;
+        const dustAlpha = 1 - dustT;
+        ctx.beginPath();
+        ctx.arc(dustX, dustY, 3 + dustT * 5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(235, 217, 200, ${dustAlpha * 0.6})`;
+        ctx.fill();
+      }
+    }
+  }
+
+  private static renderMiniHeart(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.beginPath();
+    const topCurveHeight = size * 0.3;
+    ctx.moveTo(0, topCurveHeight);
+    ctx.bezierCurveTo(0, 0, -size / 2, 0, -size / 2, topCurveHeight);
+    ctx.bezierCurveTo(-size / 2, (size + topCurveHeight) / 2, 0, (size + topCurveHeight) / 1.5, 0, size);
+    ctx.bezierCurveTo(0, (size + topCurveHeight) / 1.5, size / 2, (size + topCurveHeight) / 2, size / 2, topCurveHeight);
+    ctx.bezierCurveTo(size / 2, 0, 0, 0, 0, topCurveHeight);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  private static renderMiniSparkle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(r * 0.3, -r * 0.3);
+    ctx.lineTo(r, 0);
+    ctx.lineTo(r * 0.3, r * 0.3);
+    ctx.lineTo(0, r);
+    ctx.lineTo(-r * 0.3, r * 0.3);
+    ctx.lineTo(-r, 0);
+    ctx.lineTo(-r * 0.3, -r * 0.3);
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
   }
 }

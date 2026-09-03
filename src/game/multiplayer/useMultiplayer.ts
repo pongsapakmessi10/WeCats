@@ -70,6 +70,7 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
   const wasMovingRef = useRef<boolean>(false);
   const handleIncomingPacketRef = useRef<(packet: any, senderPeerId: string) => void>(() => {});
   const chatBubbleTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const lastBehaviorRef = useRef<string>('idle');
 
   // Sync mutable refs
   useEffect(() => {
@@ -476,13 +477,40 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
       const peer = new Peer(generatedPeerId, {
         config: {
           iceServers: [
+            // 1. Google Global STUNs (Fastest for Direct P2P Hole Punching)
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun3.l.google.com:19302' },
             { urls: 'stun:stun4.l.google.com:19302' },
+
+            // 2. Cloudflare & Twilio STUNs
             { urls: 'stun:global.stun.twilio.com:3478' },
             { urls: 'stun:stun.cloudflare.com:3478' },
+
+            // 3. Metered OpenRelay STUN (Port 80)
+            { urls: 'stun:openrelay.metered.ca:80' },
+
+            // 4. Metered OpenRelay TURN (UDP Port 443)
+            {
+              urls: 'turn:openrelay.metered.ca:443',
+              username: 'openrelayproject',
+              credential: 'openrelayproject',
+            },
+
+            // 5. Metered OpenRelay TURN (TCP Port 443 - University / Enterprise Firewall Breaker)
+            {
+              urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+              username: 'openrelayproject',
+              credential: 'openrelayproject',
+            },
+
+            // 6. Metered OpenRelay TURN (UDP Port 80)
+            {
+              urls: 'turn:openrelay.metered.ca:80',
+              username: 'openrelayproject',
+              credential: 'openrelayproject',
+            },
           ],
         },
       });
@@ -727,13 +755,32 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
       }
     };
 
+    const handleBehaviorChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.behavior) {
+        const myPos = getCurrentPlayerPos();
+        lastBehaviorRef.current = customEvent.detail.behavior;
+        broadcastToAllPeers({
+          type: 'cat-move',
+          x: myPos.x,
+          y: myPos.y,
+          direction: myPos.direction,
+          isMoving: false,
+          behavior: customEvent.detail.behavior,
+          customization: myCatRef.current,
+        });
+      }
+    };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('wecats-p2p-broadcast', handleWindowBroadcast);
+      window.addEventListener('wecats-behavior-change', handleBehaviorChange);
     }
 
     return () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('wecats-p2p-broadcast', handleWindowBroadcast);
+        window.removeEventListener('wecats-behavior-change', handleBehaviorChange);
       }
     };
   }, [broadcastToAllPeers]);
@@ -759,9 +806,10 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
           });
         }
       } else {
-        // When stopped, send 1 final stop packet
-        if (wasMovingRef.current) {
+        // When stopped or in special behavior, send packet when behavior changes
+        if (wasMovingRef.current || lastBehaviorRef.current !== behavior) {
           wasMovingRef.current = false;
+          lastBehaviorRef.current = behavior;
           lastMoveSentRef.current = now;
           broadcastToAllPeers({
             type: 'cat-move',
@@ -769,7 +817,7 @@ export function useMultiplayer(rawRoomId: string = 'public-sakura') {
             y,
             direction,
             isMoving: false,
-            behavior: 'idle',
+            behavior,
             customization: myCatRef.current,
           });
         }

@@ -415,6 +415,9 @@ interface CatStoreState {
   createCatSlot: (slotIndex: number, customization: CatCustomization) => void;
 
   // Core Care & Movement Actions
+  currentBehavior: CatBehavior;
+  setTemporaryBehavior: (behavior: CatBehavior, durationMs?: number) => void;
+  clearTemporaryBehavior: () => void;
   updateCustomization: (updates: Partial<CatCustomization>) => void;
   setMyCatPosition: (x: number, y: number, vx: number, vy: number, dir: 'up' | 'down' | 'left' | 'right', behavior: CatBehavior) => void;
   feedCat: (type: 'dry' | 'wet' | 'treat') => void;
@@ -526,6 +529,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   timeOfDay: 'morning',
   isMobileDrawerOpen: false,
   isCondoCustomizerOpen: false,
+  currentBehavior: 'idle',
   myCondo: loadInitialCondo(),
   cameraZoomMode: (typeof window !== 'undefined' && (localStorage.getItem('wecats_camera_zoom') as 'close' | 'wide')) || 'close',
   currentRoom: {
@@ -1085,9 +1089,26 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       myCat: { ...state.myCat, ...updates },
     })),
 
+  setTemporaryBehavior: (behavior, durationMs = 3500) => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('wecats-behavior-change', { detail: { behavior } }));
+    }
+    set({ currentBehavior: behavior });
+    if (durationMs > 0) {
+      setTimeout(() => {
+        set((state) => (state.currentBehavior === behavior ? { currentBehavior: 'idle' } : {}));
+      }, durationMs);
+    }
+  },
+
+  clearTemporaryBehavior: () => {
+    set((state) => (state.currentBehavior !== 'idle' ? { currentBehavior: 'idle' } : {}));
+  },
+
   setMyCatPosition: (x, y, vx, vy, dir, behavior) => {},
 
   feedCat: (type) => {
+    get().setTemporaryBehavior('eating', 3500);
     set((state) => {
       const boost = type === 'dry' ? 25 : type === 'wet' ? 35 : 15;
       const weightDelta = type === 'dry' ? 0.05 : type === 'wet' ? 0.08 : 0.02;
@@ -1126,6 +1147,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   },
 
   waterCat: () => {
+    get().setTemporaryBehavior('drinking', 3500);
     set((state) => {
       const newHydration = Math.min(100, state.stats.hydration + 30);
       const newExp = state.stats.affectionExp + 10;
@@ -1148,6 +1170,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   },
 
   groomCat: () => {
+    get().setTemporaryBehavior('grooming', 3500);
     set((state) => {
       const newHygiene = Math.min(100, state.stats.hygiene + 35);
       const newHappiness = Math.min(100, state.stats.happiness + 15);
@@ -1172,6 +1195,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
   },
 
   petCat: () => {
+    get().setTemporaryBehavior('allogrooming', 3000);
     set((state) => {
       const newHappiness = Math.min(100, state.stats.happiness + 20);
       const newExp = state.stats.affectionExp + 25;
@@ -1227,6 +1251,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       get().feedCat('wet');
       setNotification('กินแซลมอนบุฟเฟ่ต์สุดอร่อย! 🐟 +10 🐟');
     } else if (prop.actionType === 'scratch') {
+      get().setTemporaryBehavior('scratching', 4000);
       set((state) => ({
         stats: {
           ...state.stats,
@@ -1238,6 +1263,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       addDiaryEntry('ลับเล็บกับเสาเชือกป่าน 🪵', 'เล็บคมสวยและอารมณ์ดี, ได้รับ +12 🐟', '🪵', 12, 'care');
       setNotification('ลับเล็บสุดมันส์! 🪵 +12 🐟');
     } else if (prop.actionType === 'laser') {
+      get().setTemporaryBehavior('pouncing', 3500);
       set((state) => ({
         stats: {
           ...state.stats,
@@ -1249,6 +1275,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       addDiaryEntry('ไล่ตะปบจุดเลเซอร์สีแดง 🔴', 'กระโดดตะปบเลเซอร์อย่างตื่นเต้น, ได้รับ +15 🐟', '🔴', 15, 'care');
       setNotification('ตะปบเลเซอร์แดง! 🔴 +15 🐟');
     } else if (prop.actionType === 'sleep') {
+      get().setTemporaryBehavior('sleeping', 5000);
       set((state) => ({
         stats: {
           ...state.stats,
@@ -1260,6 +1287,7 @@ export const useCatStore = create<CatStoreState>((set, get) => ({
       addDiaryEntry('นอนอาบแดดอุ่นสบาย ☀️', 'ฟื้นฟูพลังงาน Energy +35%, ได้รับ +10 🐟', '☀️', 10, 'care');
       setNotification('นอนอาบแดดอุ่นสบาย~ ☀️ +10 🐟');
     } else if (prop.actionType === 'tea') {
+      get().setTemporaryBehavior('eating', 3500);
       set((state) => ({
         stats: {
           ...state.stats,

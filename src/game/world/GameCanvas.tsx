@@ -736,13 +736,27 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
       playerPosRef.current.x = Math.max(minX, Math.min(maxX, playerPosRef.current.x));
       playerPosRef.current.y = Math.max(minY, Math.min(maxY, playerPosRef.current.y));
 
-      // Broadcast Movement to P2P Peers
+      // Determine active behavior for self (with cancel-on-move)
+      const currentBehavior = useCatStore.getState().currentBehavior;
+      if (isMoving && currentBehavior !== 'idle') {
+        useCatStore.getState().clearTemporaryBehavior();
+      }
+
+      const activeBehavior = isMoving
+        ? isZooming
+          ? 'zoomies'
+          : 'walking'
+        : isZooming
+        ? 'zoomies'
+        : currentBehavior || 'idle';
+
+      // Broadcast Movement & Active Behavior to P2P Peers
       sendMyPosition(
         playerPosRef.current.x,
         playerPosRef.current.y,
         playerPosRef.current.dir,
         isMoving,
-        isZooming ? 'zoomies' : isMoving ? 'walking' : 'idle'
+        activeBehavior
       );
 
       // Broadcast position to other tabs for immediate sync (throttled at 80ms)
@@ -849,7 +863,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onOpenCustomizer }) => {
             ctx,
             custom: myCat,
             stats,
-            behavior: isZooming ? 'zoomies' : isMoving ? 'walking' : 'idle',
+            behavior: activeBehavior,
             direction: playerPosRef.current.dir,
             x: playerPosRef.current.x,
             y: playerPosRef.current.y,
